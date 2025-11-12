@@ -1,60 +1,52 @@
-package com.shoppinglist.model;
+package com.shoppinglist.dto;
 
-import jakarta.persistence.*;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "PRODUTOS")
-public class Produto {
+@Schema(description = "DTO para representar um produto")
+public class ProdutoDTO {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "produto_id")
     private Long produtoId;
 
-    @NotBlank(message = "Nome do produto é obrigatório")
-    @Size(max = 100, message = "Nome do produto deve ter no maximo 100 caracteres")
-    @Column(name = "nome", nullable = false)
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Schema(description = "Nome do produto", example = "Arroz")
     private String nome;
 
-    @Size(max = 255, message = "Descrição do produto dever ter no máximo 255 caracteres")
-    @Column(name = "descricao")
+    @Size(max = 255, message = "Descrição deve ter no máximo 255 caracteres")
+    @Schema(description = "Descrição do produto", example = "Arroz branco tipo 1")
     private String descricao;
 
-    @Size(max = 100, message = "Marca do produto deve ter no máximo 100 caracteres")
-    @Column(name = "marca")
+    @Size(max = 100, message = "Marca deve ter no máximo 100 caracteres")
+    @Schema(description = "Marca do produto", example = "Tio João")
     private String marca;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "categoria_id")
-    private Categoria categoria;
+    @Schema(description = "ID da categoria do produto")
+    private Long categoriaId;
 
-    @Column(name = "preco_medio")
+    @Schema(description = "Nome da categoria do produto")
+    private String categoriaNome;
+
+    @Schema(description = "Preço médio do produto", example = "5.50")
     private BigDecimal precoMedio;
 
-    @Column(name = "unidade_medida", length = 20)
-    private String unidadeMedida = "UNIDADE";
+    @Schema(description = "Unidade de medida", example = "KILO")
+    private String unidadeMedida;
 
-    @Column(name = "data_criacao")
     private LocalDateTime dataCriacao;
-
-    @Column(name = "ativo", length = 1)
-    private char ativo = 'S';
+    private char ativo;
 
     // Construtores
-    public Produto() {
-        this.dataCriacao = LocalDateTime.now();
-    }
+    public ProdutoDTO() {}
 
-    public Produto(String nome, String descricao, Categoria categoria) {
-        this();
+    public ProdutoDTO(String nome, String descricao, Long categoriaId) {
         this.nome = nome;
         this.descricao = descricao;
-        this.categoria = categoria;
+        this.categoriaId = categoriaId;
     }
 
     // Getters e Setters
@@ -70,8 +62,11 @@ public class Produto {
     public String getMarca() { return marca; }
     public void setMarca(String marca) { this.marca = marca; }
 
-    public Categoria getCategoria() { return categoria; }
-    public void setCategoria(Categoria categoria) { this.categoria = categoria; }
+    public Long getCategoriaId() { return categoriaId; }
+    public void setCategoriaId(Long categoriaId) { this.categoriaId = categoriaId; }
+
+    public String getCategoriaNome() { return categoriaNome; }
+    public void setCategoriaNome(String categoriaNome) { this.categoriaNome = categoriaNome; }
 
     public BigDecimal getPrecoMedio() { return precoMedio; }
     public void setPrecoMedio(BigDecimal precoMedio) { this.precoMedio = precoMedio; }
