@@ -15,14 +15,14 @@ public class SwaggerConfig {
 
     @Bean
     public OpenAPI myOpenAPI() {
-        Server devServer = new Server();
-        devServer.setUrl("http://localhost:8080");
-        devServer.setDescription("Servidor de Desenvolvimento");
+        Server server = new Server();
+        server.setUrl("http://localhost:8080");
+        server.setDescription("Servidor de Desenvolvimento Local");
 
         Contact contact = new Contact();
         contact.setEmail("seu-email@dominio.com");
         contact.setName("Shopping List API");
-        contact.setUrl("https://meusite.com");
+        contact.setUrl("https://github.com/seu-usuario");
 
         License mitLicense = new License()
                 .name("MIT License")
@@ -32,11 +32,12 @@ public class SwaggerConfig {
                 .title("Shopping List API")
                 .version("1.0.0")
                 .contact(contact)
-                .description("API para gerenciamento de listas de compras")
+                .description("Esta API expõe endpoints para gerenciar listas de compras.")
+                .termsOfService("https://meusite.com/terms")
                 .license(mitLicense);
 
         return new OpenAPI()
                 .info(info)
-                .servers(List.of(devServer));
+                .servers(List.of(server));
     }
 }
