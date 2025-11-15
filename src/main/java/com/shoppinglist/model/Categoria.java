@@ -37,7 +37,7 @@ public class Categoria {
     private LocalDateTime dataCriacao;
 
     @Column(name = "ativo", length = 1)
-    private char ativo = 'S';
+    private Character ativo = 'S'; // MUDADO: Character em vez de String
 
     // Construtores
     public Categoria() {
@@ -72,6 +72,6 @@ public class Categoria {
     public LocalDateTime getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
 
-    public char getAtivo() { return ativo; }
-    public void setAtivo(char ativo) { this.ativo = ativo; }
+    public Character getAtivo() { return ativo; }
+    public void setAtivo(Character ativo) { this.ativo = ativo; }
 }

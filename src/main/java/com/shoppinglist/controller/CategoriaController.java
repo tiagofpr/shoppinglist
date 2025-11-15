@@ -23,7 +23,7 @@ public class CategoriaController {
     @GetMapping
     @Operation(summary = "Listar todas as categorias ativas")
     public ResponseEntity<List<CategoriaDTO>> listarCategorias() {
-        List<Categoria> categorias = categoriaRepository.findByAtivo("S");
+        List<Categoria> categorias = categoriaRepository.findByAtivo('S');
         List<CategoriaDTO> categoriasDTO = categorias.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());

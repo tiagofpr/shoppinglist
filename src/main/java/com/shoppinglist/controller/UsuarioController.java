@@ -5,6 +5,8 @@ import com.shoppinglist.model.Usuario;
 import com.shoppinglist.repository.UsuarioRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,19 +19,26 @@ import java.util.stream.Collectors;
 @Tag(name = "Usuários", description = "Operações relacionadas a usuários")
 public class UsuarioController {
 
+    private static final Logger logger = LoggerFactory.getLogger(CategoriaController.class);
+
     @Autowired
     private UsuarioRepository usuarioRepository;
 
     @GetMapping
     @Operation(summary = "Listar todos os usuários ativos")
     public ResponseEntity<List<UsuarioDTO>> listarUsuarios() {
-        List<Usuario> usuarios = usuarioRepository.findAll().stream()
-                .filter(u -> "S".equals(u.getAtivo()))
-                .collect(Collectors.toList());
-        List<UsuarioDTO> usuariosDTO = usuarios.stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(usuariosDTO);
+        logger.info("Recebida requisição para listar usaurios");
+        try {
+            List<Usuario> usuarios = usuarioRepository.findByAtivo('S');
+            List<UsuarioDTO> usuariosDTO = usuarios.stream()
+                    .map(this::toDTO)
+                    .collect(Collectors.toList());
+            logger.info("Encontrado {} usuarios", usuariosDTO.stream());
+            return ResponseEntity.ok(usuariosDTO);
+        }catch (Exception e){
+            logger.error("Erro ao listar usuários");
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     @GetMapping("/{id}")

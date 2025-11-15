@@ -11,8 +11,8 @@ import java.util.List;
 @Repository
 public interface ItemListaRepository extends JpaRepository<ItemLista, Long> {
     List<ItemLista> findByListaListaId(Long listaId);
-    List<ItemLista> findByListaListaIdAndComprado(Long listaId, String comprado);
-    List<ItemLista> findByComprado(String comprado);
+    List<ItemLista> findByListaListaIdAndComprado(Long listaId, Character comprado); // MUDADO: Character
+    List<ItemLista> findByComprado(Character comprado); // MUDADO: Character
 
     @Query("SELECT i FROM ItemLista i WHERE i.lista.usuario.usuarioId = :usuarioId AND i.comprado = 'N'")
     List<ItemLista> findItensPendentesPorUsuario(Long usuarioId);
@@ -25,5 +25,5 @@ public interface ItemListaRepository extends JpaRepository<ItemLista, Long> {
     @Query("UPDATE ItemLista i SET i.comprado = 'N', i.dataCompra = null WHERE i.itemId = :itemId")
     void marcarComoNaoComprado(Long itemId);
 
-    long countByListaListaIdAndComprado(Long listaId, String comprado);
+    long countByListaListaIdAndComprado(Long listaId, Character comprado); // MUDADO: Character
 }

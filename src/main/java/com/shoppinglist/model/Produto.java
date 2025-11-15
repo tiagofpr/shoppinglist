@@ -3,7 +3,6 @@ package com.shoppinglist.model;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -16,16 +15,16 @@ public class Produto {
     @Column(name = "produto_id")
     private Long produtoId;
 
-    @NotBlank(message = "Nome do produto é obrigatório")
-    @Size(max = 100, message = "Nome do produto deve ter no maximo 100 caracteres")
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
     @Column(name = "nome", nullable = false)
     private String nome;
 
-    @Size(max = 255, message = "Descrição do produto dever ter no máximo 255 caracteres")
+    @Size(max = 255, message = "Descrição deve ter no máximo 255 caracteres")
     @Column(name = "descricao")
     private String descricao;
 
-    @Size(max = 100, message = "Marca do produto deve ter no máximo 100 caracteres")
+    @Size(max = 100, message = "Marca deve ter no máximo 100 caracteres")
     @Column(name = "marca")
     private String marca;
 
@@ -33,7 +32,7 @@ public class Produto {
     @JoinColumn(name = "categoria_id")
     private Categoria categoria;
 
-    @Column(name = "preco_medio")
+    @Column(name = "preco_medio", precision = 8, scale = 2)
     private BigDecimal precoMedio;
 
     @Column(name = "unidade_medida", length = 20)
@@ -43,7 +42,7 @@ public class Produto {
     private LocalDateTime dataCriacao;
 
     @Column(name = "ativo", length = 1)
-    private char ativo = 'S';
+    private Character ativo = 'S'; // MUDADO: Character em vez de String
 
     // Construtores
     public Produto() {
@@ -82,6 +81,6 @@ public class Produto {
     public LocalDateTime getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
 
-    public char getAtivo() { return ativo; }
-    public void setAtivo(char ativo) { this.ativo = ativo; }
+    public Character getAtivo() { return ativo; }
+    public void setAtivo(Character ativo) { this.ativo = ativo; }
 }

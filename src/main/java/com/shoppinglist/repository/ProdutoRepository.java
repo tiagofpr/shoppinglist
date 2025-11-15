@@ -10,7 +10,7 @@ import java.util.Optional;
 
 @Repository
 public interface ProdutoRepository extends JpaRepository<Produto, Long> {
-    List<Produto> findByAtivo(String ativo);
+    List<Produto> findByAtivo(Character ativo); // MUDADO: Character em vez de String
     List<Produto> findByCategoriaCategoriaId(Long categoriaId);
     List<Produto> findByNomeContainingIgnoreCase(String nome);
     Optional<Produto> findByNomeAndMarca(String nome, String marca);

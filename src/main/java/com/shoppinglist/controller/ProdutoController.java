@@ -28,7 +28,7 @@ public class ProdutoController {
     @GetMapping
     @Operation(summary = "Listar todos os produtos ativos")
     public ResponseEntity<List<ProdutoDTO>> listarProdutos() {
-        List<Produto> produtos = produtoRepository.findByAtivo("S");
+        List<Produto> produtos = produtoRepository.findByAtivo('S');
         List<ProdutoDTO> produtosDTO = produtos.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());

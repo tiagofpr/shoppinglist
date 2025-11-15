@@ -47,7 +47,7 @@ public class ItemLista {
     private Categoria categoria;
 
     @Column(name = "comprado", length = 1)
-    private char comprado = 'N';
+    private Character comprado = 'N'; // MUDADO: Character em vez de String
 
     @Column(name = "prioridade", length = 10)
     private String prioridade = "MEDIA";
@@ -101,8 +101,8 @@ public class ItemLista {
     public Categoria getCategoria() { return categoria; }
     public void setCategoria(Categoria categoria) { this.categoria = categoria; }
 
-    public char getComprado() { return comprado; }
-    public void setComprado(char comprado) { this.comprado = comprado; }
+    public Character getComprado() { return comprado; }
+    public void setComprado(Character comprado) { this.comprado = comprado; }
 
     public String getPrioridade() { return prioridade; }
     public void setPrioridade(String prioridade) { this.prioridade = prioridade; }
@@ -116,14 +116,14 @@ public class ItemLista {
     public LocalDateTime getDataCompra() { return dataCompra; }
     public void setDataCompra(LocalDateTime dataCompra) { this.dataCompra = dataCompra; }
 
-    // Métodos utilitários
+    // Métodos utilitários - CORRIGIDOS
     public void marcarComoComprado() {
-        this.comprado = 'S';
+        this.comprado = 'S'; // MUDADO: Character em vez de String
         this.dataCompra = LocalDateTime.now();
     }
 
     public void marcarComoNaoComprado() {
-        this.comprado = 'N';
+        this.comprado = 'N'; // MUDADO: Character em vez de String
         this.dataCompra = null;
     }
 }

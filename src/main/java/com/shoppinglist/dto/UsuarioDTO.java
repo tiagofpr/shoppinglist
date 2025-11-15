@@ -29,7 +29,7 @@ public class UsuarioDTO {
     private String senha;
 
     private LocalDateTime dataCriacao;
-    private char ativo;
+    private Character ativo;
 
     // Construtores
     public UsuarioDTO() {}
@@ -56,6 +56,6 @@ public class UsuarioDTO {
     public LocalDateTime getDataCriacao() { return dataCriacao; }
     public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
 
-    public char getAtivo() { return ativo; }
-    public void setAtivo(char ativo) { this.ativo = ativo; }
+    public Character getAtivo() { return ativo; }
+    public void setAtivo(Character ativo) { this.ativo = ativo; }
 }

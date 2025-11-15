@@ -42,7 +42,7 @@ public class ItemListaController {
     @GetMapping("/lista/{listaId}/pendentes")
     @Operation(summary = "Listar itens pendentes de uma lista")
     public ResponseEntity<List<ItemListaDTO>> listarItensPendentes(@PathVariable Long listaId) {
-        List<ItemLista> itens = itemListaRepository.findByListaListaIdAndComprado(listaId, "N");
+        List<ItemLista> itens = itemListaRepository.findByListaListaIdAndComprado(listaId, 'N');
         List<ItemListaDTO> itensDTO = itens.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());

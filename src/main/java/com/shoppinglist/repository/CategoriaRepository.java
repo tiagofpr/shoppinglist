@@ -8,6 +8,6 @@ import java.util.List;
 
 @Repository
 public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
-    List<Categoria> findByAtivo(String ativo);
+    List<Categoria> findByAtivo(Character ativo); // MUDADO: Character em vez de String
     List<Categoria> findByUsuarioUsuarioId(Long usuarioId);
 }
