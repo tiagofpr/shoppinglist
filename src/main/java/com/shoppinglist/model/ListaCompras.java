@@ -127,4 +127,7 @@ public class ListaCompras {
     public void preUpdate() {
         this.dataAtualizacao = LocalDateTime.now();
     }
+
+
+
 }

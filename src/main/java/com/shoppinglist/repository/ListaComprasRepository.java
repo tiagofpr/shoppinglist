@@ -6,12 +6,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
 public interface ListaComprasRepository extends JpaRepository<ListaCompras, Long> {
     List<ListaCompras> findByUsuarioUsuarioId(Long usuarioId);
+
     List<ListaCompras> findByStatus(String status);
+
     List<ListaCompras> findByUsuarioUsuarioIdAndStatus(Long usuarioId, String status);
 
     @Query("SELECT l FROM ListaCompras l WHERE l.usuario.usuarioId = :usuarioId AND l.dataCompraPrevista BETWEEN :startDate AND :endDate")
@@ -21,4 +24,11 @@ public interface ListaComprasRepository extends JpaRepository<ListaCompras, Long
     List<ListaCompras> findListasParaNotificar(LocalDate date);
 
     List<ListaCompras> findByDataCompraPrevistaAndStatus(LocalDate dataCompraPrevista, String status);
+
+    // Método para buscar listas concluídas por período baseado na data de compra realizada
+    List<ListaCompras> findByDataCompraRealizadaBetweenAndStatus(
+            LocalDate dataInicio,
+            LocalDate dataFim,
+            String status
+    );
 }

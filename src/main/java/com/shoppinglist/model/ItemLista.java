@@ -126,4 +126,6 @@ public class ItemLista {
         this.comprado = 'N'; // MUDADO: Character em vez de String
         this.dataCompra = null;
     }
+
+
 }
