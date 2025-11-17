@@ -14,7 +14,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/relatorios")
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class RelatorioController {
 
     @Autowired

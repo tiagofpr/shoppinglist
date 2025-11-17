@@ -31,4 +31,6 @@ public interface ListaComprasRepository extends JpaRepository<ListaCompras, Long
             LocalDate dataFim,
             String status
     );
+
+
 }
