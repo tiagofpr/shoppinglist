@@ -1,6 +1,7 @@
 package com.shoppinglist.controller;
 
 import com.shoppinglist.dto.GastosCategoriaDTO;
+import com.shoppinglist.dto.ListaComprasDTO;
 import com.shoppinglist.dto.RelatorioGastosPeriodoDTO;
 import com.shoppinglist.model.ItemLista;
 import com.shoppinglist.model.ListaCompras;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/relatorios")
@@ -46,12 +48,18 @@ public class RelatorioController {
 
     // Histórico de compras
     @GetMapping("/historico-compras")
-    public ResponseEntity<List<ListaCompras>> getHistoricoCompras(
+    public ResponseEntity<List<ListaComprasDTO>> getHistoricoCompras(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim) {
 
         List<ListaCompras> historico = relatorioService.getHistoricoCompras(dataInicio, dataFim);
-        return ResponseEntity.ok(historico);
+
+        // Converter para DTOs usando o método que já existe
+        List<ListaComprasDTO> historicoDTO = historico.stream()
+                .map(this::convertToDTO) // Use o método convertToDTO que já existe
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(historicoDTO);
     }
 
     // Endpoint de DEBUG - CORRIGIDO
@@ -96,5 +104,24 @@ public class RelatorioController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Erro: " + e.getMessage());
         }
+    }
+
+    // Método para converter Entity para DTO
+    private ListaComprasDTO convertToDTO(ListaCompras lista) {
+        ListaComprasDTO dto = new ListaComprasDTO();
+        dto.setListaId(lista.getListaId());
+        dto.setNome(lista.getNome());
+        dto.setDescricao(lista.getDescricao());
+        dto.setDataCompraPrevista(lista.getDataCompraPrevista());
+        dto.setDataCompraRealizada(lista.getDataCompraRealizada());
+        dto.setOrcamentoTotal(lista.getOrcamentoTotal());
+        dto.setValorTotalGasto(lista.getValorTotalGasto());
+        dto.setStatus(lista.getStatus());
+        dto.setNotificarAntes(lista.getNotificarAntes());
+        dto.setUsuarioId(lista.getUsuario().getUsuarioId());
+        dto.setDataCriacao(lista.getDataCriacao());
+        dto.setDataAtualizacao(lista.getDataAtualizacao());
+
+        return dto;
     }
 }
