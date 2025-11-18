@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -125,6 +126,19 @@ public class ItemListaController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // NOVO ENDPOINT: Atualizar preço real do item
+    @PutMapping("/{id}/preco-real")
+    @Operation(summary = "Atualizar preço real do item")
+    public ResponseEntity<ItemListaDTO> atualizarPrecoReal(@PathVariable Long id, @RequestBody BigDecimal precoReal) {
+        return itemListaRepository.findById(id)
+                .map(item -> {
+                    item.setPrecoReal(precoReal);
+                    ItemLista itemAtualizado = itemListaRepository.save(item);
+                    return ResponseEntity.ok(toDTO(itemAtualizado));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PutMapping("/{id}/marcar-comprado")
     @Operation(summary = "Marcar item como comprado")
     public ResponseEntity<ItemListaDTO> marcarComoComprado(@PathVariable Long id) {
@@ -159,7 +173,7 @@ public class ItemListaController {
         return ResponseEntity.notFound().build();
     }
 
-    // Método auxiliar para converter Entity para DTO
+    // Método auxiliar para converter Entity para DTO - ATUALIZADO
     private ItemListaDTO toDTO(ItemLista item) {
         ItemListaDTO dto = new ItemListaDTO();
         dto.setItemId(item.getItemId());
@@ -174,6 +188,7 @@ public class ItemListaController {
         dto.setObservacoes(item.getObservacoes());
         dto.setDataCriacao(item.getDataCriacao());
         dto.setDataCompra(item.getDataCompra());
+        dto.setDataAtualizacao(item.getDataAtualizacao()); // NOVO CAMPO
 
         if (item.getProduto() != null) {
             dto.setProdutoId(item.getProduto().getProdutoId());

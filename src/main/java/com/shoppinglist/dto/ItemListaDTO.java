@@ -56,6 +56,8 @@ public class ItemListaDTO {
     private LocalDateTime dataCriacao;
     private LocalDateTime dataCompra;
 
+    private LocalDateTime dataAtualizacao;
+
     // Construtores
     public ItemListaDTO() {}
 
@@ -109,4 +111,13 @@ public class ItemListaDTO {
 
     public LocalDateTime getDataCompra() { return dataCompra; }
     public void setDataCompra(LocalDateTime dataCompra) { this.dataCompra = dataCompra; }
+
+    // Getter e Setter para dataAtualizacao
+    public LocalDateTime getDataAtualizacao() {
+        return dataAtualizacao;
+    }
+
+    public void setDataAtualizacao(LocalDateTime dataAtualizacao) {
+        this.dataAtualizacao = dataAtualizacao;
+    }
 }

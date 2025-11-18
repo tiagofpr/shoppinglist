@@ -62,6 +62,9 @@ public class ItemLista {
     @Column(name = "data_compra")
     private LocalDateTime dataCompra;
 
+    @Column(name = "data_atualizacao")
+    private LocalDateTime dataAtualizacao;
+
     // Construtores
     public ItemLista() {
         this.dataCriacao = LocalDateTime.now();
@@ -73,7 +76,7 @@ public class ItemLista {
         this.nomeProduto = nomeProduto;
     }
 
-    // Getters e Setters
+     // Getters e Setters
     public Long getItemId() { return itemId; }
     public void setItemId(Long itemId) { this.itemId = itemId; }
 
@@ -116,6 +119,13 @@ public class ItemLista {
     public LocalDateTime getDataCompra() { return dataCompra; }
     public void setDataCompra(LocalDateTime dataCompra) { this.dataCompra = dataCompra; }
 
+    public LocalDateTime getDataAtualizacao() {
+        return dataAtualizacao;
+    }
+
+    public void setDataAtualizacao(LocalDateTime dataAtualizacao) {
+        this.dataAtualizacao = dataAtualizacao;
+    }
     // Métodos utilitários - CORRIGIDOS
     public void marcarComoComprado() {
         this.comprado = 'S'; // MUDADO: Character em vez de String
@@ -125,6 +135,11 @@ public class ItemLista {
     public void marcarComoNaoComprado() {
         this.comprado = 'N'; // MUDADO: Character em vez de String
         this.dataCompra = null;
+    }
+    // Método para atualizar a data automaticamente
+    @PreUpdate
+    public void preUpdate() {
+        this.dataAtualizacao = LocalDateTime.now();
     }
 
 

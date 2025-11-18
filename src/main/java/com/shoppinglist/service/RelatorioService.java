@@ -20,12 +20,24 @@ public class RelatorioService {
     private ListaComprasRepository listaComprasRepository;
 
     public RelatorioGastosPeriodoDTO getGastosPorPeriodo(LocalDate dataInicio, LocalDate dataFim) {
+        // USE O NOVO MÉTODO QUE CARREGA OS ITENS
         List<ListaCompras> listasNoPeriodo = listaComprasRepository
-                .findByDataCompraRealizadaBetweenAndStatus(
+                .findByDataCompraRealizadaBetweenAndStatusComItens(
                         dataInicio,
                         dataFim,
                         "CONCLUIDA"
                 );
+// ADICIONE DEBUG PARA VERIFICAR
+        System.out.println("=== DEBUG RELATÓRIO ===");
+        System.out.println("Período: " + dataInicio + " até " + dataFim);
+        System.out.println("Listas encontradas: " + listasNoPeriodo.size());
+
+        for (ListaCompras lista : listasNoPeriodo) {
+            System.out.println("Lista: " + lista.getNome() +
+                    ", Status: " + lista.getStatus() +
+                    ", Valor Total: " + lista.getValorTotalGasto() +
+                    ", Itens: " + (lista.getItens() != null ? lista.getItens().size() : 0));
+        }
 
         BigDecimal totalGasto = listasNoPeriodo.stream()
                 .map(ListaCompras::getValorTotalGasto)
@@ -33,9 +45,10 @@ public class RelatorioService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Long totalItensComprados = listasNoPeriodo.stream()
-                .mapToLong(lista -> lista.getItens().stream()
-                        .filter(item -> item.getComprado() == 'S') // CORRIGIDO: Character 'S'
-                        .count())
+                .mapToLong(lista -> lista.getItens() != null ?
+                        lista.getItens().stream()
+                                .filter(item -> item.getComprado() == 'S')
+                                .count() : 0)
                 .sum();
 
         return new RelatorioGastosPeriodoDTO(
@@ -49,7 +62,7 @@ public class RelatorioService {
 
     public List<GastosCategoriaDTO> getGastosPorCategoria(LocalDate dataInicio, LocalDate dataFim) {
         List<ListaCompras> listasNoPeriodo = listaComprasRepository
-                .findByDataCompraRealizadaBetweenAndStatus(
+                .findByDataCompraRealizadaBetweenAndStatusComItens(
                         dataInicio,
                         dataFim,
                         "CONCLUIDA"
@@ -59,13 +72,14 @@ public class RelatorioService {
         Map<String, BigDecimal> gastosPorCategoria = new HashMap<>();
 
         for (ListaCompras lista : listasNoPeriodo) {
-            for (ItemLista item : lista.getItens()) {
-                // CORRIGIDO: Verificar se o item foi comprado e tem preço real
-                if (item.getComprado() == 'S' && item.getPrecoReal() != null) {
-                    String categoria = obterCategoriaItem(item);
-                    BigDecimal precoReal = item.getPrecoReal();
+            if (lista.getItens() != null) {
+                for (ItemLista item : lista.getItens()) {
+                    if (item.getComprado() == 'S' && item.getPrecoReal() != null) {
+                        String categoria = obterCategoriaItem(item);
+                        BigDecimal precoReal = item.getPrecoReal();
 
-                    gastosPorCategoria.merge(categoria, precoReal, BigDecimal::add);
+                        gastosPorCategoria.merge(categoria, precoReal, BigDecimal::add);
+                    }
                 }
             }
         }
@@ -89,7 +103,7 @@ public class RelatorioService {
 
     public List<ListaCompras> getHistoricoCompras(LocalDate dataInicio, LocalDate dataFim) {
         return listaComprasRepository
-                .findByDataCompraRealizadaBetweenAndStatus(
+                .findByDataCompraRealizadaBetweenAndStatusComItens(
                         dataInicio,
                         dataFim,
                         "CONCLUIDA"

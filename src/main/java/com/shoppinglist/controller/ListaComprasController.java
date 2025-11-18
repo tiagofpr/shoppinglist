@@ -1,16 +1,21 @@
 package com.shoppinglist.controller;
 
 import com.shoppinglist.dto.ListaComprasDTO;
+import com.shoppinglist.model.ItemLista;
 import com.shoppinglist.model.ListaCompras;
 import com.shoppinglist.model.Usuario;
 import com.shoppinglist.repository.ListaComprasRepository;
 import com.shoppinglist.repository.UsuarioRepository;
+import com.shoppinglist.service.ListaComprasService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,6 +26,9 @@ public class ListaComprasController {
 
     @Autowired
     private ListaComprasRepository listaComprasRepository;
+
+    @Autowired
+    private ListaComprasService listaComprasService;
 
     @Autowired
     private UsuarioRepository usuarioRepository;
@@ -120,5 +128,33 @@ public class ListaComprasController {
         }
 
         return dto;
+    }
+
+
+    @PutMapping("/{id}/finalizar")
+    @Operation(summary = "Finalizar lista de compras")
+    public ResponseEntity<ListaCompras> finalizarLista(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataCompra) {
+
+        try {
+            ListaCompras listaFinalizada = listaComprasService.finalizarLista(id, dataCompra);
+            return ResponseEntity.ok(listaFinalizada);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // Atualizar preço real de um item
+    @PutMapping("/itens/{itemId}/preco-real")
+    public ResponseEntity<ItemLista> atualizarPrecoReal(
+            @PathVariable Long itemId,
+            @RequestBody BigDecimal precoReal) {
+        try {
+            ItemLista itemAtualizado = listaComprasService.atualizarPrecoReal(itemId, precoReal);
+            return ResponseEntity.ok(itemAtualizado);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 }
