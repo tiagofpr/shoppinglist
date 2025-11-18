@@ -133,13 +133,14 @@ public class ListaComprasController {
 
     @PutMapping("/{id}/finalizar")
     @Operation(summary = "Finalizar lista de compras")
-    public ResponseEntity<ListaCompras> finalizarLista(
+    public ResponseEntity<ListaComprasDTO> finalizarLista(
             @PathVariable Long id,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataCompra) {
 
         try {
             ListaCompras listaFinalizada = listaComprasService.finalizarLista(id, dataCompra);
-            return ResponseEntity.ok(listaFinalizada);
+            ListaComprasDTO listaDTO = convertToDTO(listaFinalizada);
+            return ResponseEntity.ok(listaDTO);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -156,5 +157,24 @@ public class ListaComprasController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    // Método para converter Entity para DTO
+    private ListaComprasDTO convertToDTO(ListaCompras lista) {
+        ListaComprasDTO dto = new ListaComprasDTO();
+        dto.setListaId(lista.getListaId());
+        dto.setNome(lista.getNome());
+        dto.setDescricao(lista.getDescricao());
+        dto.setDataCompraPrevista(lista.getDataCompraPrevista());
+        dto.setDataCompraRealizada(lista.getDataCompraRealizada());
+        dto.setOrcamentoTotal(lista.getOrcamentoTotal());
+        dto.setValorTotalGasto(lista.getValorTotalGasto());
+        dto.setStatus(lista.getStatus());
+        dto.setNotificarAntes(lista.getNotificarAntes());
+        dto.setUsuarioId(lista.getUsuario().getUsuarioId()); // Apenas o ID do usuário
+        dto.setDataCriacao(lista.getDataCriacao());
+        dto.setDataAtualizacao(lista.getDataAtualizacao());
+
+        return dto;
     }
 }
