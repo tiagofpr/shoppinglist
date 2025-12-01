@@ -1,0 +1,3060 @@
+package com.shoppinglist.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class CorsConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/api/**")
+                .allowedOriginPatterns("*") // ← MUDE PARA allowedOriginPatterns
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
+    }
+}
+package com.shoppinglist.config;
+
+import com.shoppinglist.service.JwtService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+@Component
+public class JwtInterceptor implements HandlerInterceptor {
+
+    @Autowired
+    private JwtService jwtService;
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // Permitir acesso a endpoints públicos
+        String requestURI = request.getRequestURI();
+        if (requestURI.startsWith("/api/auth") ||
+                requestURI.startsWith("/swagger") ||
+                requestURI.startsWith("/v3/api-docs") ||
+                requestURI.equals("/") ||
+                request.getMethod().equals("OPTIONS")) { // Permitir preflight CORS
+            return true;
+        }
+
+        String token = extractToken(request);
+
+        if (token == null || !jwtService.validateToken(token)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("Token inválido ou ausente");
+            return false;
+        }
+
+        // Adicionar ID do usuário ao request para uso nos controllers
+        try {
+            Long usuarioId = jwtService.getUsuarioIdFromToken(token);
+            request.setAttribute("usuarioId", usuarioId);
+        } catch (Exception e) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write("Token inválido");
+            return false;
+        }
+
+        return true;
+    }
+
+    private String extractToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
+    }
+}
+
+package com.shoppinglist.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.servers.Server;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
+
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI myOpenAPI() {
+        Server server = new Server();
+        server.setUrl("http://localhost:8080");
+        server.setDescription("Servidor de Desenvolvimento Local");
+
+        Contact contact = new Contact();
+        contact.setEmail("seu-email@dominio.com");
+        contact.setName("Shopping List API");
+        contact.setUrl("https://github.com/seu-usuario");
+
+        License mitLicense = new License()
+                .name("MIT License")
+                .url("https://choosealicense.com/licenses/mit/");
+
+        Info info = new Info()
+                .title("Shopping List API")
+                .version("1.0.0")
+                .contact(contact)
+                .description("Esta API expõe endpoints para gerenciar listas de compras.")
+                .termsOfService("https://meusite.com/terms")
+                .license(mitLicense);
+
+        return new OpenAPI()
+                .info(info)
+                .servers(List.of(server));
+    }
+}
+package com.shoppinglist.config;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    @Autowired
+    private JwtInterceptor jwtInterceptor;
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(jwtInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns("/api/auth/**");
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOrigins("http://localhost:8081") // URL do Flutter
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true);
+    }
+}
+
+package com.shoppinglist.controller;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/admin")
+@Tag(name = "Administração", description = "Endpoints administrativos")
+public class AdminController {
+
+    @GetMapping("/endpoints")
+    @Operation(summary = "Listar endpoints disponíveis")
+    public Map<String, Object> listEndpoints() {
+        Map<String, Object> response = new HashMap<>();
+
+        Map<String, String> endpoints = new HashMap<>();
+        endpoints.put("GET /api/health", "Health check da API");
+        endpoints.put("GET /api/test", "Endpoint de teste");
+        endpoints.put("GET /api/info", "Informações da API");
+        endpoints.put("GET /api/admin/endpoints", "Lista de endpoints");
+        endpoints.put("GET /api/usuarios", "Listar usuários");
+        endpoints.put("POST /api/usuarios", "Criar usuário");
+        endpoints.put("GET /api/categorias", "Listar categorias");
+        endpoints.put("POST /api/categorias", "Criar categoria");
+
+        response.put("endpoints", endpoints);
+        response.put("swagger", "http://localhost:8080/swagger-ui.html");
+        response.put("api-docs", "http://localhost:8080/v3/api-docs");
+        response.put("timestamp", java.time.LocalDateTime.now().toString());
+
+        return response;
+    }
+}
+
+package com.shoppinglist.controller;
+
+import com.shoppinglist.dto.AuthResponseDTO;
+import com.shoppinglist.dto.LoginDTO;
+import com.shoppinglist.model.Usuario;
+import com.shoppinglist.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/auth")
+@Tag(name = "Autenticação", description = "Operações de autenticação de usuários")
+public class AuthController {
+
+    @Autowired
+    private AuthService authService;
+
+    @PostMapping("/login")
+    @Operation(summary = "Autenticar usuário")
+    public ResponseEntity<AuthResponseDTO> login(@RequestBody LoginDTO loginDTO) {
+        try {
+            AuthResponseDTO response = authService.authenticate(loginDTO);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/register")
+    @Operation(summary = "Registrar novo usuário")
+    public ResponseEntity<AuthResponseDTO> register(@RequestBody Usuario usuario) {
+        try {
+            Usuario usuarioSalvo = authService.register(usuario);
+
+            // Auto-login após registro
+            LoginDTO loginDTO = new LoginDTO(usuario.getEmail(), usuario.getSenha());
+            AuthResponseDTO response = authService.authenticate(loginDTO);
+
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    //metodo temporario para verificar o token
+    @GetMapping("/verify-token")
+    @Operation(summary = "Verificar se o token é válido")
+    public ResponseEntity<Map<String, Object>> verifyToken(HttpServletRequest request) {
+        try {
+            Long usuarioId = (Long) request.getAttribute("usuarioId");
+            Map<String, Object> response = new HashMap<>();
+            response.put("valid", true);
+            response.put("usuarioId", usuarioId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+    }
+}
+package com.shoppinglist.controller;
+
+import com.shoppinglist.dto.CategoriaDTO;
+import com.shoppinglist.model.Categoria;
+import com.shoppinglist.repository.CategoriaRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/categorias")
+@Tag(name = "Categorias", description = "Operações relacionadas a categorias de produtos")
+public class CategoriaController {
+
+    @Autowired
+    private CategoriaRepository categoriaRepository;
+
+    @GetMapping
+    @Operation(summary = "Listar todas as categorias ativas")
+    public ResponseEntity<List<CategoriaDTO>> listarCategorias() {
+        List<Categoria> categorias = categoriaRepository.findByAtivo('S');
+        List<CategoriaDTO> categoriasDTO = categorias.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(categoriasDTO);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Buscar categoria por ID")
+    public ResponseEntity<CategoriaDTO> buscarCategoria(@PathVariable Long id) {
+        return categoriaRepository.findById(id)
+                .map(this::toDTO)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    @Operation(summary = "Criar uma nova categoria")
+    public ResponseEntity<CategoriaDTO> criarCategoria(@RequestBody CategoriaDTO categoriaDTO) {
+        Categoria categoria = new Categoria();
+        categoria.setNome(categoriaDTO.getNome());
+        categoria.setDescricao(categoriaDTO.getDescricao());
+        categoria.setCor(categoriaDTO.getCor());
+        categoria.setIcone(categoriaDTO.getIcone());
+
+        Categoria categoriaSalva = categoriaRepository.save(categoria);
+        return ResponseEntity.ok(toDTO(categoriaSalva));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Atualizar uma categoria existente")
+    public ResponseEntity<CategoriaDTO> atualizarCategoria(@PathVariable Long id, @RequestBody CategoriaDTO categoriaDTO) {
+        return categoriaRepository.findById(id)
+                .map(categoria -> {
+                    categoria.setNome(categoriaDTO.getNome());
+                    categoria.setDescricao(categoriaDTO.getDescricao());
+                    categoria.setCor(categoriaDTO.getCor());
+                    categoria.setIcone(categoriaDTO.getIcone());
+                    Categoria categoriaAtualizada = categoriaRepository.save(categoria);
+                    return ResponseEntity.ok(toDTO(categoriaAtualizada));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Excluir uma categoria (desativação lógica)")
+    public ResponseEntity<Void> excluirCategoria(@PathVariable Long id) {
+        return categoriaRepository.findById(id)
+                .map(categoria -> {
+                    categoria.setAtivo('N');
+                    categoriaRepository.save(categoria);
+                    return ResponseEntity.noContent().<Void>build();
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // Método auxiliar para converter Entity para DTO
+    private CategoriaDTO toDTO(Categoria categoria) {
+        CategoriaDTO dto = new CategoriaDTO();
+        dto.setCategoriaId(categoria.getCategoriaId());
+        dto.setNome(categoria.getNome());
+        dto.setDescricao(categoria.getDescricao());
+        dto.setCor(categoria.getCor());
+        dto.setIcone(categoria.getIcone());
+        dto.setDataCriacao(categoria.getDataCriacao());
+        dto.setAtivo(categoria.getAtivo());
+
+        if (categoria.getUsuario() != null) {
+            dto.setUsuarioId(categoria.getUsuario().getUsuarioId());
+        }
+
+        return dto;
+    }
+}
+
+package com.shoppinglist.controller;
+
+import com.shoppinglist.model.ListaCompras;
+import com.shoppinglist.repository.ListaComprasRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/dashboard")
+@Tag(name = "Dashboard", description = "Operações relacionadas ao dashboard")
+public class DashboardController {
+
+    @Autowired
+    private ListaComprasRepository listaComprasRepository;
+
+    @GetMapping("/usuario/{usuarioId}")
+    @Operation(summary = "Obter dados do dashboard para um usuário")
+    public ResponseEntity<Map<String, Object>> getDashboardData(@PathVariable Long usuarioId) {
+        try {
+            Map<String, Object> dashboardData = new HashMap<>();
+
+            // Buscar todas as listas do usuário
+            List<ListaCompras> listasUsuario = listaComprasRepository.findByUsuarioUsuarioId(usuarioId);
+
+            // Calcular estatísticas manualmente
+            Long listasAtivas = listasUsuario.stream()
+                    .filter(lista -> "PENDENTE".equals(lista.getStatus()))
+                    .count();
+
+            Long itensPendentes = listasUsuario.stream()
+                    .mapToLong(lista -> lista.getItens().stream()
+                            .filter(item -> !Boolean.TRUE.equals(item.getComprado()))
+                            .count())
+                    .sum();
+
+            BigDecimal orcamentoTotal = listasUsuario.stream()
+                    .filter(lista -> "PENDENTE".equals(lista.getStatus()))
+                    .map(lista -> lista.getOrcamentoTotal() != null ? lista.getOrcamentoTotal() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal economia = listasUsuario.stream()
+                    .flatMap(lista -> lista.getItens().stream())
+                    .filter(item -> Boolean.TRUE.equals(item.getComprado()))
+                    .map(item -> item.getPrecoReal() != null ? item.getPrecoReal() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Listas recentes (últimas 3)
+            List<Map<String, Object>> recentLists = listasUsuario.stream()
+                    .sorted((a, b) -> b.getDataCriacao().compareTo(a.getDataCriacao()))
+                    .limit(3)
+                    .map(this::convertListToDashboardDTO)
+                    .collect(Collectors.toList());
+
+            dashboardData.put("listasAtivas", listasAtivas);
+            dashboardData.put("itensPendentes", itensPendentes);
+            dashboardData.put("orcamentoTotal", orcamentoTotal);
+            dashboardData.put("economia", economia);
+            dashboardData.put("recentLists", recentLists);
+
+            return ResponseEntity.ok(dashboardData);
+        } catch (Exception e) {
+            // Se houver erro, retornar dados vazios
+            Map<String, Object> errorData = new HashMap<>();
+            errorData.put("listasAtivas", 0);
+            errorData.put("itensPendentes", 0);
+            errorData.put("orcamentoTotal", BigDecimal.ZERO);
+            errorData.put("economia", BigDecimal.ZERO);
+            errorData.put("recentLists", List.of());
+            errorData.put("error", e.getMessage());
+
+            return ResponseEntity.ok(errorData);
+        }
+    }
+
+    private Map<String, Object> convertListToDashboardDTO(ListaCompras lista) {
+        Map<String, Object> dto = new HashMap<>();
+        dto.put("listaId", lista.getListaId());
+        dto.put("nome", lista.getNome());
+        dto.put("dataCriacao", lista.getDataCriacao() != null ? lista.getDataCriacao().toString() : "");
+
+        // Calcular progresso
+        Long totalItems = (long) lista.getItens().size();
+        Long completedItems = lista.getItens().stream()
+                .filter(item -> Boolean.TRUE.equals(item.getComprado()))
+                .count();
+
+        dto.put("totalItems", totalItems);
+        dto.put("completedItems", completedItems);
+
+        return dto;
+    }
+}
+package com.shoppinglist.controller;
+
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/debug")
+public class DebugController {
+
+    @GetMapping("/usuarios")
+    public Map<String, Object> debugUsuarios() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Endpoint de usuários está funcionando!");
+        response.put("timestamp", java.time.LocalDateTime.now().toString());
+        response.put("status", "SUCCESS");
+        return response;
+    }
+
+    @GetMapping("/test-all")
+    public Map<String, Object> testAllEndpoints() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("/api/health", "Health Check");
+        response.put("/api/test", "Test Endpoint");
+        response.put("/api/debug/usuarios", "Debug Usuários");
+        response.put("/api/usuarios", "Usuários Principal");
+        response.put("status", "Todos os endpoints listados");
+        return response;
+    }
+}
+package com.shoppinglist.controller;
+
+import com.shoppinglist.dto.ItemListaDTO;
+import com.shoppinglist.model.ItemLista;
+import com.shoppinglist.model.ListaCompras;
+import com.shoppinglist.model.Produto;
+import com.shoppinglist.model.Categoria;
+import com.shoppinglist.repository.ItemListaRepository;
+import com.shoppinglist.repository.ListaComprasRepository;
+import com.shoppinglist.repository.ProdutoRepository;
+import com.shoppinglist.repository.CategoriaRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/itens-lista")
+@Tag(name = "Itens da Lista", description = "Operações relacionadas a itens da lista de compras")
+public class ItemListaController {
+
+    @Autowired
+    private ItemListaRepository itemListaRepository;
+
+    @Autowired
+    private ListaComprasRepository listaComprasRepository;
+
+    @Autowired
+    private ProdutoRepository produtoRepository;
+
+    @Autowired
+    private CategoriaRepository categoriaRepository;
+
+    // ... seus outros métodos existentes ...
+
+    // ✅ MÉTODO PARA CONVERTER ENTITY PARA DTO
+    private ItemListaDTO toDTO(ItemLista item) {
+        ItemListaDTO dto = new ItemListaDTO();
+        dto.setItemId(item.getItemId());
+        dto.setNomeProduto(item.getNomeProduto());
+        dto.setQuantidade(item.getQuantidade());
+        dto.setUnidadeMedida(item.getUnidadeMedida());
+        dto.setPrecoEstimado(item.getPrecoEstimado());
+        dto.setPrecoReal(item.getPrecoReal());
+        dto.setComprado(item.getComprado());
+        dto.setPrioridade(item.getPrioridade());
+        dto.setObservacoes(item.getObservacoes());
+        dto.setDataCriacao(item.getDataCriacao());
+        dto.setDataCompra(item.getDataCompra());
+        dto.setDataAtualizacao(item.getDataAtualizacao());
+
+        // IDs das entidades relacionadas
+        if (item.getLista() != null) {
+            dto.setListaId(item.getLista().getListaId());
+        }
+
+        if (item.getProduto() != null) {
+            dto.setProdutoId(item.getProduto().getProdutoId());
+        }
+
+        if (item.getCategoria() != null) {
+            dto.setCategoriaId(item.getCategoria().getCategoriaId());
+            dto.setCategoriaNome(item.getCategoria().getNome());
+        }
+
+        return dto;
+    }
+
+    // ✅ MÉTODO PARA CONVERTER DTO PARA ENTITY
+    private ItemLista toEntity(ItemListaDTO dto) {
+        ItemLista item = new ItemLista();
+
+        // Buscar a lista
+        if (dto.getListaId() != null) {
+            ListaCompras lista = listaComprasRepository.findById(dto.getListaId())
+                    .orElseThrow(() -> new RuntimeException("Lista não encontrada"));
+            item.setLista(lista);
+        }
+
+        // Buscar o produto (se existir)
+        if (dto.getProdutoId() != null) {
+            Produto produto = produtoRepository.findById(dto.getProdutoId())
+                    .orElse(null); // Pode ser null se não existir
+            item.setProduto(produto);
+        }
+
+        // Buscar a categoria (se existir)
+        if (dto.getCategoriaId() != null) {
+            Categoria categoria = categoriaRepository.findById(dto.getCategoriaId())
+                    .orElse(null); // Pode ser null se não existir
+            item.setCategoria(categoria);
+        }
+
+        item.setNomeProduto(dto.getNomeProduto());
+        item.setQuantidade(dto.getQuantidade());
+        item.setUnidadeMedida(dto.getUnidadeMedida());
+        item.setPrecoEstimado(dto.getPrecoEstimado());
+        item.setPrecoReal(dto.getPrecoReal());
+        item.setComprado(dto.getComprado());
+        item.setPrioridade(dto.getPrioridade());
+        item.setObservacoes(dto.getObservacoes());
+
+        return item;
+    }
+
+    // ✅ EXEMPLO DE ENDPOINT USANDO A CONVERSÃO
+    @GetMapping("/lista/{listaId}")
+    @Operation(summary = "Listar itens por lista de compras")
+    public ResponseEntity<List<ItemListaDTO>> listarItensPorLista(@PathVariable Long listaId) {
+        try {
+            List<ItemLista> itens = itemListaRepository.findByListaListaId(listaId);
+            List<ItemListaDTO> itensDTO = itens.stream()
+                    .map(this::toDTO)
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(itensDTO);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Buscar item por ID")
+    public ResponseEntity<ItemListaDTO> buscarItem(@PathVariable Long id) {
+        return itemListaRepository.findById(id)
+                .map(this::toDTO)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    @Operation(summary = "Criar um novo item na lista")
+    public ResponseEntity<ItemListaDTO> criarItem(@RequestBody ItemListaDTO itemDTO) {
+        try {
+            ItemLista item = toEntity(itemDTO);
+            ItemLista itemSalvo = itemListaRepository.save(item);
+            return ResponseEntity.ok(toDTO(itemSalvo));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Atualizar um item existente")
+    public ResponseEntity<ItemListaDTO> atualizarItem(@PathVariable Long id, @RequestBody ItemListaDTO itemDTO) {
+        try {
+            return itemListaRepository.findById(id)
+                    .map(item -> {
+                        // Atualizar campos básicos
+                        item.setNomeProduto(itemDTO.getNomeProduto());
+                        item.setQuantidade(itemDTO.getQuantidade());
+                        item.setUnidadeMedida(itemDTO.getUnidadeMedida());
+                        item.setPrecoEstimado(itemDTO.getPrecoEstimado());
+                        item.setPrecoReal(itemDTO.getPrecoReal());
+                        item.setComprado(itemDTO.getComprado());
+                        item.setPrioridade(itemDTO.getPrioridade());
+                        item.setObservacoes(itemDTO.getObservacoes());
+
+                        // Atualizar categoria se fornecida
+                        if (itemDTO.getCategoriaId() != null) {
+                            Categoria categoria = categoriaRepository.findById(itemDTO.getCategoriaId())
+                                    .orElse(null);
+                            item.setCategoria(categoria);
+                        }
+
+                        ItemLista itemAtualizado = itemListaRepository.save(item);
+                        return ResponseEntity.ok(toDTO(itemAtualizado));
+                    })
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PutMapping("/{id}/marcar-comprado")
+    @Operation(summary = "Marcar item como comprado")
+    public ResponseEntity<ItemListaDTO> marcarComoComprado(@PathVariable Long id) {
+        try {
+            return itemListaRepository.findById(id)
+                    .map(item -> {
+                        item.marcarComoComprado();
+                        ItemLista itemAtualizado = itemListaRepository.save(item);
+                        return ResponseEntity.ok(toDTO(itemAtualizado));
+                    })
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PutMapping("/{id}/marcar-nao-comprado")
+    @Operation(summary = "Marcar item como não comprado")
+    public ResponseEntity<ItemListaDTO> marcarComoNaoComprado(@PathVariable Long id) {
+        try {
+            return itemListaRepository.findById(id)
+                    .map(item -> {
+                        item.marcarComoNaoComprado();
+                        ItemLista itemAtualizado = itemListaRepository.save(item);
+                        return ResponseEntity.ok(toDTO(itemAtualizado));
+                    })
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Excluir um item da lista")
+    public ResponseEntity<Void> excluirItem(@PathVariable Long id) {
+        try {
+            if (itemListaRepository.existsById(id)) {
+                itemListaRepository.deleteById(id);
+                return ResponseEntity.noContent().build();
+            }
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+}
+
+
+package com.shoppinglist.controller;
+
+import com.shoppinglist.dto.ListaComprasDTO;
+import com.shoppinglist.model.ItemLista;
+import com.shoppinglist.model.ListaCompras;
+import com.shoppinglist.model.Usuario;
+import com.shoppinglist.repository.ListaComprasRepository;
+import com.shoppinglist.repository.UsuarioRepository;
+import com.shoppinglist.service.ListaComprasService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/listas-compras")
+@Tag(name = "Listas de Compras", description = "Operações relacionadas a listas de compras")
+public class ListaComprasController {
+
+    @Autowired
+    private ListaComprasRepository listaComprasRepository;
+
+    @Autowired
+    private ListaComprasService listaComprasService;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @GetMapping
+    @Operation(summary = "Listar todas as listas de compras")
+    public ResponseEntity<List<ListaComprasDTO>> listarListas() {
+        List<ListaCompras> listas = listaComprasRepository.findAll();
+        List<ListaComprasDTO> listasDTO = listas.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(listasDTO);
+    }
+
+    @GetMapping("/usuario/{usuarioId}")
+    @Operation(summary = "Listar listas de compras por usuário")
+    public ResponseEntity<List<ListaComprasDTO>> listarListasPorUsuario(@PathVariable Long usuarioId) {
+        List<ListaCompras> listas = listaComprasRepository.findByUsuarioUsuarioId(usuarioId);
+        List<ListaComprasDTO> listasDTO = listas.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(listasDTO);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Buscar lista de compras por ID")
+    public ResponseEntity<ListaComprasDTO> buscarLista(@PathVariable Long id) {
+        return listaComprasRepository.findById(id)
+                .map(this::toDTO)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    @Operation(summary = "Criar uma nova lista de compras")
+    public ResponseEntity<ListaComprasDTO> criarLista(@RequestBody ListaComprasDTO listaDTO) {
+        try {
+            Usuario usuario = usuarioRepository.findById(listaDTO.getUsuarioId())
+                    .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+            // ✅ USE O CONSTRUTOR QUE CHAMA O @PrePersist
+            ListaCompras lista = new ListaCompras(listaDTO.getNome(), usuario);
+
+            // ✅ SETE OS DEMAIS CAMPOS
+            lista.setDescricao(listaDTO.getDescricao());
+            lista.setDataCompraPrevista(listaDTO.getDataCompraPrevista());
+            lista.setOrcamentoTotal(listaDTO.getOrcamentoTotal());
+            lista.setNotificarAntes(listaDTO.getNotificarAntes());
+
+            // ✅ INICIALIZE CAMPOS QUE PODEM SER NULL
+            if (listaDTO.getStatus() != null) {
+                lista.setStatus(listaDTO.getStatus());
+            } else {
+                lista.setStatus("PENDENTE"); // Valor padrão
+            }
+
+            if (listaDTO.getValorTotalGasto() != null) {
+                lista.setValorTotalGasto(listaDTO.getValorTotalGasto());
+            } else {
+                lista.setValorTotalGasto(BigDecimal.ZERO); // Valor padrão
+            }
+
+            // ✅ O @PrePersist SERÁ CHAMADO AUTOMATICAMENTE AO SALVAR
+            ListaCompras listaSalva = listaComprasRepository.save(lista);
+            return ResponseEntity.ok(toDTO(listaSalva));
+
+        } catch (Exception e) {
+            // ✅ LOG DO ERRO PARA DEBUG
+            System.err.println("Erro ao criar lista: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    @PutMapping("/{id}")
+    @Operation(summary = "Atualizar uma lista de compras existente")
+    public ResponseEntity<ListaComprasDTO> atualizarLista(@PathVariable Long id, @RequestBody ListaComprasDTO listaDTO) {
+        return listaComprasRepository.findById(id)
+                .map(lista -> {
+                    lista.setNome(listaDTO.getNome());
+                    lista.setDescricao(listaDTO.getDescricao());
+                    lista.setDataCompraPrevista(listaDTO.getDataCompraPrevista());
+                    lista.setOrcamentoTotal(listaDTO.getOrcamentoTotal());
+                    lista.setNotificarAntes(listaDTO.getNotificarAntes());
+                    lista.setStatus(listaDTO.getStatus());
+
+                    ListaCompras listaAtualizada = listaComprasRepository.save(lista);
+                    return ResponseEntity.ok(toDTO(listaAtualizada));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Excluir uma lista de compras")
+    public ResponseEntity<Void> excluirLista(@PathVariable Long id) {
+        if (listaComprasRepository.existsById(id)) {
+            listaComprasRepository.deleteById(id);
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    // Método auxiliar para converter Entity para DTO
+    private ListaComprasDTO toDTO(ListaCompras lista) {
+        ListaComprasDTO dto = new ListaComprasDTO();
+        dto.setListaId(lista.getListaId());
+        dto.setNome(lista.getNome());
+        dto.setDescricao(lista.getDescricao());
+        dto.setDataCompraPrevista(lista.getDataCompraPrevista());
+        dto.setDataCompraRealizada(lista.getDataCompraRealizada());
+        dto.setOrcamentoTotal(lista.getOrcamentoTotal());
+        dto.setValorTotalGasto(lista.getValorTotalGasto());
+        dto.setStatus(lista.getStatus());
+        dto.setNotificarAntes(lista.getNotificarAntes());
+        dto.setDataCriacao(lista.getDataCriacao());
+        dto.setDataAtualizacao(lista.getDataAtualizacao());
+
+        if (lista.getUsuario() != null) {
+            dto.setUsuarioId(lista.getUsuario().getUsuarioId());
+        }
+
+        return dto;
+    }
+
+
+    @PutMapping("/{id}/finalizar")
+    @Operation(summary = "Finalizar lista de compras")
+    public ResponseEntity<ListaComprasDTO> finalizarLista(
+            @PathVariable Long id,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataCompra) {
+
+        try {
+            ListaCompras listaFinalizada = listaComprasService.finalizarLista(id, dataCompra);
+            ListaComprasDTO listaDTO = convertToDTO(listaFinalizada);
+            return ResponseEntity.ok(listaDTO);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // Atualizar preço real de um item
+    @PutMapping("/itens/{itemId}/preco-real")
+    public ResponseEntity<ItemLista> atualizarPrecoReal(
+            @PathVariable Long itemId,
+            @RequestBody BigDecimal precoReal) {
+        try {
+            ItemLista itemAtualizado = listaComprasService.atualizarPrecoReal(itemId, precoReal);
+            return ResponseEntity.ok(itemAtualizado);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // Método para converter Entity para DTO
+    private ListaComprasDTO convertToDTO(ListaCompras lista) {
+        ListaComprasDTO dto = new ListaComprasDTO();
+        dto.setListaId(lista.getListaId());
+        dto.setNome(lista.getNome());
+        dto.setDescricao(lista.getDescricao());
+        dto.setDataCompraPrevista(lista.getDataCompraPrevista());
+        dto.setDataCompraRealizada(lista.getDataCompraRealizada());
+        dto.setOrcamentoTotal(lista.getOrcamentoTotal());
+        dto.setValorTotalGasto(lista.getValorTotalGasto());
+        dto.setStatus(lista.getStatus());
+        dto.setNotificarAntes(lista.getNotificarAntes());
+        dto.setUsuarioId(lista.getUsuario().getUsuarioId()); // Apenas o ID do usuário
+        dto.setDataCriacao(lista.getDataCriacao());
+        dto.setDataAtualizacao(lista.getDataAtualizacao());
+
+        return dto;
+    }
+}
+
+package com.shoppinglist.controller;
+
+import com.shoppinglist.dto.ProdutoDTO;
+import com.shoppinglist.model.Categoria;
+import com.shoppinglist.model.Produto;
+import com.shoppinglist.repository.CategoriaRepository;
+import com.shoppinglist.repository.ProdutoRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/produtos")
+@Tag(name = "Produtos", description = "Operações relacionadas a produtos")
+public class ProdutoController {
+
+    @Autowired
+    private ProdutoRepository produtoRepository;
+
+    @Autowired
+    private CategoriaRepository categoriaRepository;
+
+    @GetMapping
+    @Operation(summary = "Listar todos os produtos ativos")
+    public ResponseEntity<List<ProdutoDTO>> listarProdutos() {
+        List<Produto> produtos = produtoRepository.findByAtivo('S');
+        List<ProdutoDTO> produtosDTO = produtos.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(produtosDTO);
+    }
+
+    @GetMapping("/categoria/{categoriaId}")
+    @Operation(summary = "Listar produtos por categoria")
+    public ResponseEntity<List<ProdutoDTO>> listarProdutosPorCategoria(@PathVariable Long categoriaId) {
+        List<Produto> produtos = produtoRepository.findByCategoriaCategoriaId(categoriaId);
+        List<ProdutoDTO> produtosDTO = produtos.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(produtosDTO);
+    }
+
+    @GetMapping("/buscar")
+    @Operation(summary = "Buscar produtos por nome")
+    public ResponseEntity<List<ProdutoDTO>> buscarProdutosPorNome(@RequestParam String nome) {
+        List<Produto> produtos = produtoRepository.findByNomeContainingIgnoreCase(nome);
+        List<ProdutoDTO> produtosDTO = produtos.stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(produtosDTO);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Buscar produto por ID")
+    public ResponseEntity<ProdutoDTO> buscarProduto(@PathVariable Long id) {
+        return produtoRepository.findById(id)
+                .map(this::toDTO)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    @Operation(summary = "Criar um novo produto")
+    public ResponseEntity<ProdutoDTO> criarProduto(@RequestBody ProdutoDTO produtoDTO) {
+        Categoria categoria = null;
+        if (produtoDTO.getCategoriaId() != null) {
+            categoria = categoriaRepository.findById(produtoDTO.getCategoriaId())
+                    .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+        }
+
+        Produto produto = new Produto();
+        produto.setNome(produtoDTO.getNome());
+        produto.setDescricao(produtoDTO.getDescricao());
+        produto.setMarca(produtoDTO.getMarca());
+        produto.setCategoria(categoria);
+        produto.setPrecoMedio(produtoDTO.getPrecoMedio());
+        produto.setUnidadeMedida(produtoDTO.getUnidadeMedida());
+
+        Produto produtoSalvo = produtoRepository.save(produto);
+        return ResponseEntity.ok(toDTO(produtoSalvo));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Atualizar um produto existente")
+    public ResponseEntity<ProdutoDTO> atualizarProduto(@PathVariable Long id, @RequestBody ProdutoDTO produtoDTO) {
+        return produtoRepository.findById(id)
+                .map(produto -> {
+                    Categoria categoria = null;
+                    if (produtoDTO.getCategoriaId() != null) {
+                        categoria = categoriaRepository.findById(produtoDTO.getCategoriaId())
+                                .orElseThrow(() -> new RuntimeException("Categoria não encontrada"));
+                    }
+
+                    produto.setNome(produtoDTO.getNome());
+                    produto.setDescricao(produtoDTO.getDescricao());
+                    produto.setMarca(produtoDTO.getMarca());
+                    produto.setCategoria(categoria);
+                    produto.setPrecoMedio(produtoDTO.getPrecoMedio());
+                    produto.setUnidadeMedida(produtoDTO.getUnidadeMedida());
+
+                    Produto produtoAtualizado = produtoRepository.save(produto);
+                    return ResponseEntity.ok(toDTO(produtoAtualizado));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Excluir um produto (desativação lógica)")
+    public ResponseEntity<Void> excluirProduto(@PathVariable Long id) {
+        return produtoRepository.findById(id)
+                .map(produto -> {
+                    produto.setAtivo('N');
+                    produtoRepository.save(produto);
+                    return ResponseEntity.noContent().<Void>build();
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // Método auxiliar para converter Entity para DTO
+    private ProdutoDTO toDTO(Produto produto) {
+        ProdutoDTO dto = new ProdutoDTO();
+        dto.setProdutoId(produto.getProdutoId());
+        dto.setNome(produto.getNome());
+        dto.setDescricao(produto.getDescricao());
+        dto.setMarca(produto.getMarca());
+        dto.setPrecoMedio(produto.getPrecoMedio());
+        dto.setUnidadeMedida(produto.getUnidadeMedida());
+        dto.setDataCriacao(produto.getDataCriacao());
+        dto.setAtivo(produto.getAtivo());
+
+        if (produto.getCategoria() != null) {
+            dto.setCategoriaId(produto.getCategoria().getCategoriaId());
+            dto.setCategoriaNome(produto.getCategoria().getNome());
+        }
+
+        return dto;
+    }
+}
+
+package com.shoppinglist.controller;
+
+import com.shoppinglist.dto.GastosCategoriaDTO;
+import com.shoppinglist.dto.ListaComprasDTO;
+import com.shoppinglist.dto.RelatorioGastosPeriodoDTO;
+import com.shoppinglist.model.ItemLista;
+import com.shoppinglist.model.ListaCompras;
+import com.shoppinglist.repository.ListaComprasRepository; // ADICIONE ESTE IMPORT
+import com.shoppinglist.service.RelatorioService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/relatorios")
+public class RelatorioController {
+
+    @Autowired
+    private RelatorioService relatorioService;
+
+    @Autowired // ADICIONE ESTA INJEÇÃO
+    private ListaComprasRepository listaComprasRepository;
+
+    // Relatório de gastos por período
+    @GetMapping("/gastos-periodo")
+    public ResponseEntity<RelatorioGastosPeriodoDTO> getGastosPorPeriodo(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim) {
+
+        RelatorioGastosPeriodoDTO relatorio = relatorioService.getGastosPorPeriodo(dataInicio, dataFim);
+        return ResponseEntity.ok(relatorio);
+    }
+
+    // Relatório de gastos por categoria
+    @GetMapping("/gastos-categoria")
+    public ResponseEntity<List<GastosCategoriaDTO>> getGastosPorCategoria(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim) {
+
+        List<GastosCategoriaDTO> relatorio = relatorioService.getGastosPorCategoria(dataInicio, dataFim);
+        return ResponseEntity.ok(relatorio);
+    }
+
+    // Histórico de compras
+    @GetMapping("/historico-compras")
+    public ResponseEntity<List<ListaComprasDTO>> getHistoricoCompras(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim) {
+
+        List<ListaCompras> historico = relatorioService.getHistoricoCompras(dataInicio, dataFim);
+
+        // Converter para DTOs usando o método que já existe
+        List<ListaComprasDTO> historicoDTO = historico.stream()
+                .map(this::convertToDTO) // Use o método convertToDTO que já existe
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(historicoDTO);
+    }
+
+    // Endpoint de DEBUG - CORRIGIDO
+    @GetMapping("/debug")
+    public ResponseEntity<String> debugRelatorios(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim) {
+
+        try {
+            // USE O MÉTODO ORIGINAL POR ENQUANTO
+            List<ListaCompras> listas = listaComprasRepository
+                    .findByDataCompraRealizadaBetweenAndStatus(dataInicio, dataFim, "CONCLUIDA");
+
+            StringBuilder debugInfo = new StringBuilder();
+            debugInfo.append("=== DEBUG RELATÓRIOS ===\n");
+            debugInfo.append("Período: ").append(dataInicio).append(" até ").append(dataFim).append("\n");
+            debugInfo.append("Listas encontradas: ").append(listas.size()).append("\n\n");
+
+            for (ListaCompras lista : listas) {
+                debugInfo.append("Lista: ").append(lista.getNome())
+                        .append(", Status: ").append(lista.getStatus())
+                        .append(", Data Compra: ").append(lista.getDataCompraRealizada())
+                        .append(", Valor Total: ").append(lista.getValorTotalGasto())
+                        .append(", Itens: ").append(lista.getItens() != null ? lista.getItens().size() : 0)
+                        .append("\n");
+
+                // FORÇAR O CARREGAMENTO DOS ITENS
+                if (lista.getItens() != null && !lista.getItens().isEmpty()) {
+                    for (ItemLista item : lista.getItens()) {
+                        debugInfo.append("  - ").append(item.getNomeProduto())
+                                .append(", Comprado: ").append(item.getComprado())
+                                .append(", Preço Real: ").append(item.getPrecoReal())
+                                .append("\n");
+                    }
+                } else {
+                    debugInfo.append("  - Nenhum item carregado (relacionamento LAZY)\n");
+                }
+                debugInfo.append("\n");
+            }
+
+            return ResponseEntity.ok(debugInfo.toString());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Erro: " + e.getMessage());
+        }
+    }
+
+    // Método para converter Entity para DTO
+    private ListaComprasDTO convertToDTO(ListaCompras lista) {
+        ListaComprasDTO dto = new ListaComprasDTO();
+        dto.setListaId(lista.getListaId());
+        dto.setNome(lista.getNome());
+        dto.setDescricao(lista.getDescricao());
+        dto.setDataCompraPrevista(lista.getDataCompraPrevista());
+        dto.setDataCompraRealizada(lista.getDataCompraRealizada());
+        dto.setOrcamentoTotal(lista.getOrcamentoTotal());
+        dto.setValorTotalGasto(lista.getValorTotalGasto());
+        dto.setStatus(lista.getStatus());
+        dto.setNotificarAntes(lista.getNotificarAntes());
+        dto.setUsuarioId(lista.getUsuario().getUsuarioId());
+        dto.setDataCriacao(lista.getDataCriacao());
+        dto.setDataAtualizacao(lista.getDataAtualizacao());
+
+        return dto;
+    }
+}
+
+package com.shoppinglist.controller;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/test")
+@Tag(name = "Sistema", description = "Endpoints para verificação do sistema")
+public class TestController {
+
+    @GetMapping("/health")
+    @Operation(summary = "Verificar saúde da API", description = "Retorna o status atual da API")
+    public Map<String, String> health() {
+        Map<String, String> response = new HashMap<>();
+        response.put("status", "OK");
+        response.put("message", "API está funcionando!");
+        response.put("timestamp", java.time.LocalDateTime.now().toString());
+        response.put("version", "1.0.0");
+        return response;
+    }
+
+    @GetMapping("/test")
+    @Operation(summary = "Endpoint de teste", description = "Endpoint simples para testar a API")
+    public Map<String, String> test() {
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Test endpoint funcionando!");
+        response.put("status", "success");
+        return response;
+    }
+
+    @GetMapping("/info")
+    @Operation(summary = "Informações da API", description = "Retorna informações sobre a API")
+    public Map<String, String> info() {
+        Map<String, String> response = new HashMap<>();
+        response.put("name", "Shopping List API");
+        response.put("version", "1.0.0");
+        response.put("description", "API para gerenciamento de listas de compras");
+        response.put("documentation", "http://localhost:8080/swagger-ui.html");
+        return response;
+    }
+
+    @GetMapping("/dashboard-test")
+    public ResponseEntity<Map<String, Object>> dashboardTest() {
+        return ResponseEntity.ok(Map.of(
+                "listasAtivas", 2,
+                "itensPendentes", 15,
+                "orcamentoTotal", 850.50,
+                "economia", 120.75,
+                "recentLists", java.util.List.of(
+                        Map.of("nome", "Mercado Semanal", "totalItems", 12, "completedItems", 8),
+                        Map.of("nome", "Feira da Fruta", "totalItems", 6, "completedItems", 3)
+                )
+        ));
+    }
+}
+
+package com.shoppinglist.controller;
+
+import com.shoppinglist.dto.UsuarioDTO;
+import com.shoppinglist.model.Usuario;
+import com.shoppinglist.repository.UsuarioRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/api/usuarios")
+@Tag(name = "Usuários", description = "Operações relacionadas a usuários")
+public class UsuarioController {
+
+    private static final Logger logger = LoggerFactory.getLogger(UsuarioController.class);
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @GetMapping
+    @Operation(summary = "Listar todos os usuários ativos")
+    public ResponseEntity<List<UsuarioDTO>> listarUsuarios() {
+        logger.info("Recebida requisição para listar usuários");
+        try {
+            List<Usuario> usuarios = usuarioRepository.findByAtivo(true);
+            List<UsuarioDTO> usuariosDTO = usuarios.stream()
+                    .map(this::toDTO)
+                    .collect(Collectors.toList());
+            logger.info("Encontrado {} usuários", usuariosDTO.size());
+            return ResponseEntity.ok(usuariosDTO);
+        } catch (Exception e) {
+            logger.error("Erro ao listar usuários: {}", e.getMessage());
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Buscar usuário por ID")
+    public ResponseEntity<UsuarioDTO> buscarUsuario(@PathVariable Long id) {
+        return usuarioRepository.findById(id)
+                .map(this::toDTO)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping
+    @Operation(summary = "Criar um novo usuário")
+    public ResponseEntity<UsuarioDTO> criarUsuario(@RequestBody UsuarioDTO usuarioDTO) {
+        try {
+            // Verificar se email já existe
+            if (usuarioRepository.existsByEmail(usuarioDTO.getEmail())) {
+                logger.warn("Tentativa de criar usuário com email já existente: {}", usuarioDTO.getEmail());
+                return ResponseEntity.badRequest().build();
+            }
+
+            Usuario usuario = new Usuario();
+            usuario.setNome(usuarioDTO.getNome());
+            usuario.setEmail(usuarioDTO.getEmail());
+            usuario.setSenha(usuarioDTO.getSenha()); // ⚠️ Em produção, criptografar a senha!
+            usuario.setAtivo(true);
+
+            Usuario usuarioSalvo = usuarioRepository.save(usuario);
+            logger.info("Usuário criado com ID: {}", usuarioSalvo.getUsuarioId());
+            return ResponseEntity.ok(toDTO(usuarioSalvo));
+        } catch (Exception e) {
+            logger.error("Erro ao criar usuário: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Atualizar um usuário existente")
+    public ResponseEntity<UsuarioDTO> atualizarUsuario(@PathVariable Long id, @RequestBody UsuarioDTO usuarioDTO) {
+        try {
+            return (ResponseEntity<UsuarioDTO>) usuarioRepository.findById(id)
+                    .map(usuario -> {
+                        // Verificar se o email já existe para outro usuário
+                        if (!usuario.getEmail().equals(usuarioDTO.getEmail()) &&
+                                usuarioRepository.existsByEmail(usuarioDTO.getEmail())) {
+                            logger.warn("Tentativa de atualizar para email já existente: {}", usuarioDTO.getEmail());
+                            return ResponseEntity.<UsuarioDTO>badRequest().build();
+                        }
+
+                        usuario.setNome(usuarioDTO.getNome());
+                        usuario.setEmail(usuarioDTO.getEmail());
+                        if (usuarioDTO.getSenha() != null && !usuarioDTO.getSenha().isEmpty()) {
+                            usuario.setSenha(usuarioDTO.getSenha()); // ⚠️ Em produção, criptografar a senha!
+                        }
+
+                        Usuario usuarioAtualizado = usuarioRepository.save(usuario);
+                        logger.info("Usuário atualizado com ID: {}", id);
+                        return ResponseEntity.ok(toDTO(usuarioAtualizado));
+                    })
+                    .orElseGet(() -> ResponseEntity.notFound().build()); // ✅ CORRIGIDO: Usando orElseGet
+        } catch (Exception e) {
+            logger.error("Erro ao atualizar usuário ID {}: {}", id, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Excluir um usuário (desativação lógica)")
+    public ResponseEntity<Object> excluirUsuario(@PathVariable Long id) {
+        try {
+            return usuarioRepository.findById(id)
+                    .map(usuario -> {
+                        usuario.setAtivo(false);
+                        usuarioRepository.save(usuario);
+                        logger.info("Usuário desativado com ID: {}", id);
+                        return ResponseEntity.noContent().build();
+                    })
+                    .orElseGet(() -> ResponseEntity.notFound().build()); // ✅ CORRIGIDO: Usando orElseGet
+        } catch (Exception e) {
+            logger.error("Erro ao excluir usuário ID {}: {}", id, e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // Método auxiliar para converter Entity para DTO
+    private UsuarioDTO toDTO(Usuario usuario) {
+        UsuarioDTO dto = new UsuarioDTO();
+        dto.setUsuarioId(usuario.getUsuarioId());
+        dto.setNome(usuario.getNome());
+        dto.setEmail(usuario.getEmail());
+        dto.setDataCriacao(usuario.getDataCriacao());
+        dto.setAtivo(usuario.getAtivo());
+        // Não incluir a senha no DTO de retorno por segurança
+        return dto;
+    }
+}
+
+package com.shoppinglist.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+@Schema(description = "DTO para resposta de autenticação")
+public class AuthResponseDTO {
+
+    @Schema(description = "Token JWT para autenticação")
+    private String token;
+
+    @Schema(description = "ID do usuário autenticado")
+    private Long usuarioId;
+
+    @Schema(description = "Nome do usuário")
+    private String nome;
+
+    @Schema(description = "Email do usuário")
+    private String email;
+
+    // Construtores
+    public AuthResponseDTO() {}
+
+    public AuthResponseDTO(String token, Long usuarioId, String nome, String email) {
+        this.token = token;
+        this.usuarioId = usuarioId;
+        this.nome = nome;
+        this.email = email;
+    }
+
+    // Getters e Setters
+    public String getToken() { return token; }
+    public void setToken(String token) { this.token = token; }
+
+    public Long getUsuarioId() { return usuarioId; }
+    public void setUsuarioId(Long usuarioId) { this.usuarioId = usuarioId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+}
+
+package com.shoppinglist.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+import java.time.LocalDateTime;
+
+@Schema(description = "DTO para representar uma categoria")
+public class CategoriaDTO {
+
+    private Long categoriaId;
+
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Schema(description = "Nome da categoria", example = "Hortifruti")
+    private String nome;
+
+    @Size(max = 255, message = "Descrição deve ter no máximo 255 caracteres")
+    @Schema(description = "Descrição da categoria", example = "Frutas, verduras e legumes")
+    private String descricao;
+
+    @Schema(description = "Cor em formato HEX", example = "#27ae60")
+    private String cor;
+
+    @Schema(description = "Ícone para representação visual", example = "local_florist")
+    private String icone;
+
+    private Long usuarioId;
+    private LocalDateTime dataCriacao;
+    private char ativo;
+
+    // Construtores
+    public CategoriaDTO() {}
+
+    public CategoriaDTO(String nome, String descricao) {
+        this.nome = nome;
+        this.descricao = descricao;
+    }
+
+    // Getters e Setters
+    public Long getCategoriaId() { return categoriaId; }
+    public void setCategoriaId(Long categoriaId) { this.categoriaId = categoriaId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public String getCor() { return cor; }
+    public void setCor(String cor) { this.cor = cor; }
+
+    public String getIcone() { return icone; }
+    public void setIcone(String icone) { this.icone = icone; }
+
+    public Long getUsuarioId() { return usuarioId; }
+    public void setUsuarioId(Long usuarioId) { this.usuarioId = usuarioId; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public char getAtivo() { return ativo; }
+    public void setAtivo(char ativo) { this.ativo = ativo; }
+}
+
+package com.shoppinglist.dto;
+
+import java.math.BigDecimal;
+
+public class GastosCategoriaDTO {
+    private String categoria;
+    private BigDecimal totalGasto;
+
+    public GastosCategoriaDTO(String categoria, BigDecimal totalGasto) {
+        this.categoria = categoria;
+        this.totalGasto = totalGasto;
+    }
+
+    // Getters e Setters
+    public String getCategoria() { return categoria; }
+    public void setCategoria(String categoria) { this.categoria = categoria; }
+
+    public BigDecimal getTotalGasto() { return totalGasto; }
+    public void setTotalGasto(BigDecimal totalGasto) { this.totalGasto = totalGasto; }
+}
+
+package com.shoppinglist.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Schema(description = "DTO para representar um item da lista de compras")
+public class ItemListaDTO {
+
+    private Long itemId;
+
+    @NotNull(message = "Lista é obrigatória")
+    @Schema(description = "ID da lista de compras")
+    private Long listaId;
+
+    @Schema(description = "ID do produto")
+    private Long produtoId;
+
+    @NotBlank(message = "Nome do produto é obrigatório")
+    @Size(max = 100, message = "Nome do produto deve ter no máximo 100 caracteres")
+    @Schema(description = "Nome do produto", example = "Arroz")
+    private String nomeProduto;
+
+    @Schema(description = "Quantidade do item", example = "2.0")
+    private BigDecimal quantidade;
+
+    @Schema(description = "Unidade de medida", example = "KILO")
+    private String unidadeMedida;
+
+    @Schema(description = "Preço estimado do item", example = "11.00")
+    private BigDecimal precoEstimado;
+
+    @Schema(description = "Preço real pago pelo item", example = "10.50")
+    private BigDecimal precoReal;
+
+    @Schema(description = "ID da categoria do item")
+    private Long categoriaId;
+
+    @Schema(description = "Nome da categoria do item")
+    private String categoriaNome;
+
+    @Schema(description = "Indica se o item foi comprado", example = "N")
+    private boolean comprado;
+
+    @Schema(description = "Prioridade do item", example = "ALTA")
+    private String prioridade;
+
+    @Size(max = 255, message = "Observações deve ter no máximo 255 caracteres")
+    @Schema(description = "Observações sobre o item")
+    private String observacoes;
+
+    private LocalDateTime dataCriacao;
+    private LocalDateTime dataCompra;
+
+    private LocalDateTime dataAtualizacao;
+
+    // Construtores
+    public ItemListaDTO() {}
+
+    public ItemListaDTO(Long listaId, String nomeProduto) {
+        this.listaId = listaId;
+        this.nomeProduto = nomeProduto;
+    }
+
+    // Getters e Setters
+    public Long getItemId() { return itemId; }
+    public void setItemId(Long itemId) { this.itemId = itemId; }
+
+    public Long getListaId() { return listaId; }
+    public void setListaId(Long listaId) { this.listaId = listaId; }
+
+    public Long getProdutoId() { return produtoId; }
+    public void setProdutoId(Long produtoId) { this.produtoId = produtoId; }
+
+    public String getNomeProduto() { return nomeProduto; }
+    public void setNomeProduto(String nomeProduto) { this.nomeProduto = nomeProduto; }
+
+    public BigDecimal getQuantidade() { return quantidade; }
+    public void setQuantidade(BigDecimal quantidade) { this.quantidade = quantidade; }
+
+    public String getUnidadeMedida() { return unidadeMedida; }
+    public void setUnidadeMedida(String unidadeMedida) { this.unidadeMedida = unidadeMedida; }
+
+    public BigDecimal getPrecoEstimado() { return precoEstimado; }
+    public void setPrecoEstimado(BigDecimal precoEstimado) { this.precoEstimado = precoEstimado; }
+
+    public BigDecimal getPrecoReal() { return precoReal; }
+    public void setPrecoReal(BigDecimal precoReal) { this.precoReal = precoReal; }
+
+    public Long getCategoriaId() { return categoriaId; }
+    public void setCategoriaId(Long categoriaId) { this.categoriaId = categoriaId; }
+
+    public String getCategoriaNome() { return categoriaNome; }
+    public void setCategoriaNome(String categoriaNome) { this.categoriaNome = categoriaNome; }
+
+    public Boolean getComprado() { return comprado; }
+    public void setComprado(Boolean comprado) { this.comprado = comprado; }
+
+    public String getPrioridade() { return prioridade; }
+    public void setPrioridade(String prioridade) { this.prioridade = prioridade; }
+
+    public String getObservacoes() { return observacoes; }
+    public void setObservacoes(String observacoes) { this.observacoes = observacoes; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public LocalDateTime getDataCompra() { return dataCompra; }
+    public void setDataCompra(LocalDateTime dataCompra) { this.dataCompra = dataCompra; }
+
+    // Getter e Setter para dataAtualizacao
+    public LocalDateTime getDataAtualizacao() {
+        return dataAtualizacao;
+    }
+
+    public void setDataAtualizacao(LocalDateTime dataAtualizacao) {
+        this.dataAtualizacao = dataAtualizacao;
+    }
+}
+
+package com.shoppinglist.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@Schema(description = "DTO para representar uma lista de compras")
+public class ListaComprasDTO {
+
+    private Long listaId;
+
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Schema(description = "Nome da lista de compras", example = "Compras do Mês")
+    private String nome;
+
+    @Size(max = 255, message = "Descrição deve ter no máximo 255 caracteres")
+    @Schema(description = "Descrição da lista", example = "Compras mensais de supermercado")
+    private String descricao;
+
+    @Schema(description = "Data prevista para realizar as compras")
+    private LocalDate dataCompraPrevista;
+
+    @Schema(description = "Data em que as compras foram realizadas")
+    private LocalDate dataCompraRealizada;
+
+    @Schema(description = "Orçamento total estimado")
+    private BigDecimal orcamentoTotal;
+
+    @Schema(description = "Valor total realmente gasto")
+    private BigDecimal valorTotalGasto;
+
+    @Schema(description = "Status da lista", example = "PENDENTE")
+    private String status;
+
+    @Schema(description = "Dias de antecedência para notificação", example = "1")
+    private Integer notificarAntes;
+
+    @NotNull(message = "Usuário é obrigatório")
+    @Schema(description = "ID do usuário proprietário da lista")
+    private Long usuarioId;
+
+    private LocalDateTime dataCriacao;
+    private LocalDateTime dataAtualizacao;
+
+    @Schema(description = "Itens da lista de compras")
+    private List<ItemListaDTO> itens = new ArrayList<>();
+
+    // Construtores
+    public ListaComprasDTO() {}
+
+    public ListaComprasDTO(String nome, Long usuarioId) {
+        this.nome = nome;
+        this.usuarioId = usuarioId;
+    }
+
+    // Getters e Setters
+    public Long getListaId() { return listaId; }
+    public void setListaId(Long listaId) { this.listaId = listaId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public LocalDate getDataCompraPrevista() { return dataCompraPrevista; }
+    public void setDataCompraPrevista(LocalDate dataCompraPrevista) { this.dataCompraPrevista = dataCompraPrevista; }
+
+    public LocalDate getDataCompraRealizada() { return dataCompraRealizada; }
+    public void setDataCompraRealizada(LocalDate dataCompraRealizada) { this.dataCompraRealizada = dataCompraRealizada; }
+
+    public BigDecimal getOrcamentoTotal() { return orcamentoTotal; }
+    public void setOrcamentoTotal(BigDecimal orcamentoTotal) { this.orcamentoTotal = orcamentoTotal; }
+
+    public BigDecimal getValorTotalGasto() { return valorTotalGasto; }
+    public void setValorTotalGasto(BigDecimal valorTotalGasto) { this.valorTotalGasto = valorTotalGasto; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
+    public Integer getNotificarAntes() { return notificarAntes; }
+    public void setNotificarAntes(Integer notificarAntes) { this.notificarAntes = notificarAntes; }
+
+    public Long getUsuarioId() { return usuarioId; }
+    public void setUsuarioId(Long usuarioId) { this.usuarioId = usuarioId; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public LocalDateTime getDataAtualizacao() { return dataAtualizacao; }
+    public void setDataAtualizacao(LocalDateTime dataAtualizacao) { this.dataAtualizacao = dataAtualizacao; }
+
+    public List<ItemListaDTO> getItens() { return itens; }
+    public void setItens(List<ItemListaDTO> itens) { this.itens = itens; }
+}
+
+package com.shoppinglist.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+@Schema(description = "DTO para autenticação de usuário")
+public class LoginDTO {
+
+    @NotBlank(message = "Email é obrigatório")
+    @Email(message = "Email deve ser válido")
+    @Schema(description = "Email do usuário", example = "usuario@example.com")
+    private String email;
+
+    @NotBlank(message = "Senha é obrigatória")
+    @Schema(description = "Senha do usuário", example = "senha123")
+    private String senha;
+
+    // Construtores
+    public LoginDTO() {}
+
+    public LoginDTO(String email, String senha) {
+        this.email = email;
+        this.senha = senha;
+    }
+
+    // Getters e Setters
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getSenha() { return senha; }
+    public void setSenha(String senha) { this.senha = senha; }
+}
+package com.shoppinglist.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Schema(description = "DTO para representar um produto")
+public class ProdutoDTO {
+
+    private Long produtoId;
+
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Schema(description = "Nome do produto", example = "Arroz")
+    private String nome;
+
+    @Size(max = 255, message = "Descrição deve ter no máximo 255 caracteres")
+    @Schema(description = "Descrição do produto", example = "Arroz branco tipo 1")
+    private String descricao;
+
+    @Size(max = 100, message = "Marca deve ter no máximo 100 caracteres")
+    @Schema(description = "Marca do produto", example = "Tio João")
+    private String marca;
+
+    @Schema(description = "ID da categoria do produto")
+    private Long categoriaId;
+
+    @Schema(description = "Nome da categoria do produto")
+    private String categoriaNome;
+
+    @Schema(description = "Preço médio do produto", example = "5.50")
+    private BigDecimal precoMedio;
+
+    @Schema(description = "Unidade de medida", example = "KILO")
+    private String unidadeMedida;
+
+    private LocalDateTime dataCriacao;
+    private char ativo;
+
+    // Construtores
+    public ProdutoDTO() {}
+
+    public ProdutoDTO(String nome, String descricao, Long categoriaId) {
+        this.nome = nome;
+        this.descricao = descricao;
+        this.categoriaId = categoriaId;
+    }
+
+    // Getters e Setters
+    public Long getProdutoId() { return produtoId; }
+    public void setProdutoId(Long produtoId) { this.produtoId = produtoId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public String getMarca() { return marca; }
+    public void setMarca(String marca) { this.marca = marca; }
+
+    public Long getCategoriaId() { return categoriaId; }
+    public void setCategoriaId(Long categoriaId) { this.categoriaId = categoriaId; }
+
+    public String getCategoriaNome() { return categoriaNome; }
+    public void setCategoriaNome(String categoriaNome) { this.categoriaNome = categoriaNome; }
+
+    public BigDecimal getPrecoMedio() { return precoMedio; }
+    public void setPrecoMedio(BigDecimal precoMedio) { this.precoMedio = precoMedio; }
+
+    public String getUnidadeMedida() { return unidadeMedida; }
+    public void setUnidadeMedida(String unidadeMedida) { this.unidadeMedida = unidadeMedida; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public char getAtivo() { return ativo; }
+    public void setAtivo(char ativo) { this.ativo = ativo; }
+}
+
+
+package com.shoppinglist.dto;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+public class RelatorioGastosPeriodoDTO {
+    private LocalDate dataInicio;
+    private LocalDate dataFim;
+    private BigDecimal totalGasto;
+    private Long totalItensComprados;
+    private Integer totalComprasRealizadas;
+
+    public RelatorioGastosPeriodoDTO(LocalDate dataInicio, LocalDate dataFim,
+                                     BigDecimal totalGasto, Long totalItensComprados,
+                                     Integer totalComprasRealizadas) {
+        this.dataInicio = dataInicio;
+        this.dataFim = dataFim;
+        this.totalGasto = totalGasto;
+        this.totalItensComprados = totalItensComprados;
+        this.totalComprasRealizadas = totalComprasRealizadas;
+    }
+
+    // Getters e Setters
+    public LocalDate getDataInicio() { return dataInicio; }
+    public void setDataInicio(LocalDate dataInicio) { this.dataInicio = dataInicio; }
+
+    public LocalDate getDataFim() { return dataFim; }
+    public void setDataFim(LocalDate dataFim) { this.dataFim = dataFim; }
+
+    public BigDecimal getTotalGasto() { return totalGasto; }
+    public void setTotalGasto(BigDecimal totalGasto) { this.totalGasto = totalGasto; }
+
+    public Long getTotalItensComprados() { return totalItensComprados; }
+    public void setTotalItensComprados(Long totalItensComprados) { this.totalItensComprados = totalItensComprados; }
+
+    public Integer getTotalComprasRealizadas() { return totalComprasRealizadas; }
+    public void setTotalComprasRealizadas(Integer totalComprasRealizadas) { this.totalComprasRealizadas = totalComprasRealizadas; }
+}
+
+
+
+package com.shoppinglist.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import java.time.LocalDateTime;
+
+@Schema(description = "DTO para representar um usuário")
+public class UsuarioDTO {
+
+    private Long usuarioId;
+
+    @Schema(description = "Nome do usuário", example = "João Silva")
+    private String nome;
+
+    @Schema(description = "Email do usuário", example = "joao@example.com")
+    private String email;
+
+    @Schema(description = "Senha do usuário (apenas para criação/atualização)", example = "senha123")
+    private String senha;
+
+    @Schema(description = "Data de criação do usuário")
+    private LocalDateTime dataCriacao;
+
+    @Schema(description = "Indica se o usuário está ativo")
+    private Boolean ativo;
+
+    // Construtores, getters e setters
+    public UsuarioDTO() {}
+
+    // Getters e Setters
+    public Long getUsuarioId() { return usuarioId; }
+    public void setUsuarioId(Long usuarioId) { this.usuarioId = usuarioId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getSenha() { return senha; }
+    public void setSenha(String senha) { this.senha = senha; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public Boolean getAtivo() { return ativo; }
+    public void setAtivo(Boolean ativo) { this.ativo = ativo; }
+}
+
+package com.shoppinglist.model;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "CATEGORIAS")
+public class Categoria {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "categoria_id")
+    private Long categoriaId;
+
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Column(name = "nome", nullable = false)
+    private String nome;
+
+    @Size(max = 255, message = "Descrição deve ter no máximo 255 caracteres")
+    @Column(name = "descricao")
+    private String descricao;
+
+    @Column(name = "cor", length = 7)
+    private String cor = "#3498db";
+
+    @Column(name = "icone", length = 50)
+    private String icone = "shopping_cart";
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
+
+    @Column(name = "data_criacao")
+    private LocalDateTime dataCriacao;
+
+    @Column(name = "ativo", length = 1)
+    private Character ativo = 'S'; // MUDADO: Character em vez de String
+
+    // Construtores
+    public Categoria() {
+        this.dataCriacao = LocalDateTime.now();
+    }
+
+    public Categoria(String nome, String descricao) {
+        this();
+        this.nome = nome;
+        this.descricao = descricao;
+    }
+
+    // Getters e Setters
+    public Long getCategoriaId() { return categoriaId; }
+    public void setCategoriaId(Long categoriaId) { this.categoriaId = categoriaId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public String getCor() { return cor; }
+    public void setCor(String cor) { this.cor = cor; }
+
+    public String getIcone() { return icone; }
+    public void setIcone(String icone) { this.icone = icone; }
+
+    public Usuario getUsuario() { return usuario; }
+    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public Character getAtivo() { return ativo; }
+    public void setAtivo(Character ativo) { this.ativo = ativo; }
+}
+
+
+
+package com.shoppinglist.model;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "ITENS_LISTA")
+public class ItemLista {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "item_id")
+    private Long itemId;
+
+    @NotNull(message = "Lista é obrigatória")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lista_id", nullable = false)
+    private ListaCompras lista;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "produto_id")
+    private Produto produto;
+
+    @NotBlank(message = "Nome do produto é obrigatório")
+    @Size(max = 100, message = "Nome do produto deve ter no máximo 100 caracteres")
+    @Column(name = "nome_produto", nullable = false)
+    private String nomeProduto;
+
+    @Column(name = "quantidade", precision = 8, scale = 3)
+    private BigDecimal quantidade = BigDecimal.ONE;
+
+    @Column(name = "unidade_medida", length = 20)
+    private String unidadeMedida = "UNIDADE";
+
+    @Column(name = "preco_estimado", precision = 8, scale = 2)
+    private BigDecimal precoEstimado;
+
+    @Column(name = "preco_real", precision = 8, scale = 2)
+    private BigDecimal precoReal;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "categoria_id")
+    private Categoria categoria;
+
+    @Column(name = "comprado")
+    private Boolean comprado = false;
+
+    @Column(name = "prioridade", length = 10)
+    private String prioridade = "MEDIA";
+
+    @Size(max = 255, message = "Observações deve ter no máximo 255 caracteres")
+    @Column(name = "observacoes")
+    private String observacoes;
+
+    @Column(name = "data_criacao")
+    private LocalDateTime dataCriacao;
+
+    @Column(name = "data_compra")
+    private LocalDateTime dataCompra;
+
+    @Column(name = "data_atualizacao")
+    private LocalDateTime dataAtualizacao;
+
+    // Construtores
+    public ItemLista() {
+        this.dataCriacao = LocalDateTime.now();
+    }
+
+    public ItemLista(ListaCompras lista, String nomeProduto) {
+        this();
+        this.lista = lista;
+        this.nomeProduto = nomeProduto;
+    }
+
+     // Getters e Setters
+    public Long getItemId() { return itemId; }
+    public void setItemId(Long itemId) { this.itemId = itemId; }
+
+    public ListaCompras getLista() { return lista; }
+    public void setLista(ListaCompras lista) { this.lista = lista; }
+
+    public Produto getProduto() { return produto; }
+    public void setProduto(Produto produto) { this.produto = produto; }
+
+    public String getNomeProduto() { return nomeProduto; }
+    public void setNomeProduto(String nomeProduto) { this.nomeProduto = nomeProduto; }
+
+    public BigDecimal getQuantidade() { return quantidade; }
+    public void setQuantidade(BigDecimal quantidade) { this.quantidade = quantidade; }
+
+    public String getUnidadeMedida() { return unidadeMedida; }
+    public void setUnidadeMedida(String unidadeMedida) { this.unidadeMedida = unidadeMedida; }
+
+    public BigDecimal getPrecoEstimado() { return precoEstimado; }
+    public void setPrecoEstimado(BigDecimal precoEstimado) { this.precoEstimado = precoEstimado; }
+
+    public BigDecimal getPrecoReal() { return precoReal; }
+    public void setPrecoReal(BigDecimal precoReal) { this.precoReal = precoReal; }
+
+    public Categoria getCategoria() { return categoria; }
+    public void setCategoria(Categoria categoria) { this.categoria = categoria; }
+
+    public Boolean getComprado() { return comprado; }
+    public void setComprado(Boolean comprado) { this.comprado = comprado; }
+
+    public String getPrioridade() { return prioridade; }
+    public void setPrioridade(String prioridade) { this.prioridade = prioridade; }
+
+    public String getObservacoes() { return observacoes; }
+    public void setObservacoes(String observacoes) { this.observacoes = observacoes; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public LocalDateTime getDataCompra() { return dataCompra; }
+    public void setDataCompra(LocalDateTime dataCompra) { this.dataCompra = dataCompra; }
+
+    public LocalDateTime getDataAtualizacao() {
+        return dataAtualizacao;
+    }
+
+    public void setDataAtualizacao(LocalDateTime dataAtualizacao) {
+        this.dataAtualizacao = dataAtualizacao;
+    }
+
+    public void marcarComoComprado() {
+        this.comprado = true;
+        this.dataCompra = LocalDateTime.now();
+    }
+
+    public void marcarComoNaoComprado() {
+        this.comprado = false;
+        this.dataCompra = null;
+    }
+
+
+    // Método para atualizar a data automaticamente
+    @PreUpdate
+    public void preUpdate() {
+        this.dataAtualizacao = LocalDateTime.now();
+    }
+
+    public Boolean isComprado() {
+        return Boolean.TRUE.equals(comprado);
+    }
+}
+
+package com.shoppinglist.model;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@Entity
+@Table(name = "LISTAS_COMPRAS")
+public class ListaCompras {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "lista_id")
+    private Long listaId;
+
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Column(name = "nome", nullable = false)
+    private String nome;
+
+    @Size(max = 255, message = "Descrição deve ter no máximo 255 caracteres")
+    @Column(name = "descricao")
+    private String descricao;
+
+    @Column(name = "data_compra_prevista")
+    private LocalDate dataCompraPrevista;
+
+    @Column(name = "data_compra_realizada")
+    private LocalDate dataCompraRealizada;
+
+    @Column(name = "orcamento_total", precision = 10, scale = 2)
+    private BigDecimal orcamentoTotal;
+
+    @Column(name = "valor_total_gasto", precision = 10, scale = 2)
+    private BigDecimal valorTotalGasto;
+
+    @Column(name = "status", length = 20)
+    private String status = "PENDENTE";
+
+    @Column(name = "notificar_antes")
+    private Integer notificarAntes = 1;
+
+    @NotNull(message = "Usuário é obrigatório")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id", nullable = false)
+    private Usuario usuario;
+
+    @Column(name = "data_criacao")
+    private LocalDateTime dataCriacao;
+
+    @Column(name = "data_atualizacao")
+    private LocalDateTime dataAtualizacao;
+
+    @Column(name = "data_ultima_modificacao")
+    private LocalDateTime dataUltimaModificacao;
+
+    @OneToMany(mappedBy = "lista", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ItemLista> itens = new ArrayList<>();
+
+    // Construtores
+    public ListaCompras() {
+        // Remova a inicialização dos campos aqui
+        // Eles serão inicializados no @PrePersist
+    }
+
+    public ListaCompras(String nome, Usuario usuario) {
+        this();
+        this.nome = nome;
+        this.usuario = usuario;
+    }
+
+    // ✅ ADICIONE ESTE MÉTODO PARA INICIALIZAR AS DATAS
+    @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        this.dataCriacao = now;
+        this.dataAtualizacao = now;
+        this.dataUltimaModificacao = now; // ✅ INICIALIZA O CAMPO QUE ESTÁ CAUSANDO O ERRO
+
+        // Valores padrão
+        if (this.status == null) {
+            this.status = "PENDENTE";
+        }
+        if (this.notificarAntes == null) {
+            this.notificarAntes = 1;
+        }
+        if (this.valorTotalGasto == null) {
+            this.valorTotalGasto = BigDecimal.ZERO;
+        }
+    }
+
+    // ✅ ATUALIZE ESTE MÉTODO PARA ATUALIZAR TODAS AS DATAS
+    @PreUpdate
+    protected void onUpdate() {
+        this.dataAtualizacao = LocalDateTime.now();
+        this.dataUltimaModificacao = LocalDateTime.now(); // ✅ ATUALIZA SEMPRE
+    }
+
+    // Getters e Setters
+    public Long getListaId() { return listaId; }
+    public void setListaId(Long listaId) { this.listaId = listaId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public LocalDate getDataCompraPrevista() { return dataCompraPrevista; }
+    public void setDataCompraPrevista(LocalDate dataCompraPrevista) { this.dataCompraPrevista = dataCompraPrevista; }
+
+    public LocalDate getDataCompraRealizada() { return dataCompraRealizada; }
+    public void setDataCompraRealizada(LocalDate dataCompraRealizada) { this.dataCompraRealizada = dataCompraRealizada; }
+
+    public BigDecimal getOrcamentoTotal() { return orcamentoTotal; }
+    public void setOrcamentoTotal(BigDecimal orcamentoTotal) { this.orcamentoTotal = orcamentoTotal; }
+
+    public BigDecimal getValorTotalGasto() { return valorTotalGasto; }
+    public void setValorTotalGasto(BigDecimal valorTotalGasto) { this.valorTotalGasto = valorTotalGasto; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
+    public Integer getNotificarAntes() { return notificarAntes; }
+    public void setNotificarAntes(Integer notificarAntes) { this.notificarAntes = notificarAntes; }
+
+    public Usuario getUsuario() { return usuario; }
+    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public LocalDateTime getDataAtualizacao() { return dataAtualizacao; }
+    public void setDataAtualizacao(LocalDateTime dataAtualizacao) { this.dataAtualizacao = dataAtualizacao; }
+
+    // ✅ GETTER E SETTER PARA O CAMPO NOVO
+    public LocalDateTime getDataUltimaModificacao() { return dataUltimaModificacao; }
+    public void setDataUltimaModificacao(LocalDateTime dataUltimaModificacao) { this.dataUltimaModificacao = dataUltimaModificacao; }
+
+    public List<ItemLista> getItens() { return itens; }
+    public void setItens(List<ItemLista> itens) { this.itens = itens; }
+
+    // Métodos utilitários
+    public void adicionarItem(ItemLista item) {
+        itens.add(item);
+        item.setLista(this);
+    }
+
+    public void removerItem(ItemLista item) {
+        itens.remove(item);
+        item.setLista(null);
+    }
+}
+
+
+package com.shoppinglist.model;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "PRODUTOS")
+public class Produto {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "produto_id")
+    private Long produtoId;
+
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Column(name = "nome", nullable = false)
+    private String nome;
+
+    @Size(max = 255, message = "Descrição deve ter no máximo 255 caracteres")
+    @Column(name = "descricao")
+    private String descricao;
+
+    @Size(max = 100, message = "Marca deve ter no máximo 100 caracteres")
+    @Column(name = "marca")
+    private String marca;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "categoria_id")
+    private Categoria categoria;
+
+    @Column(name = "preco_medio", precision = 8, scale = 2)
+    private BigDecimal precoMedio;
+
+    @Column(name = "unidade_medida", length = 20)
+    private String unidadeMedida = "UNIDADE";
+
+    @Column(name = "data_criacao")
+    private LocalDateTime dataCriacao;
+
+    @Column(name = "ativo", length = 1)
+    private Character ativo = 'S'; // MUDADO: Character em vez de String
+
+    // Construtores
+    public Produto() {
+        this.dataCriacao = LocalDateTime.now();
+    }
+
+    public Produto(String nome, String descricao, Categoria categoria) {
+        this();
+        this.nome = nome;
+        this.descricao = descricao;
+        this.categoria = categoria;
+    }
+
+    // Getters e Setters
+    public Long getProdutoId() { return produtoId; }
+    public void setProdutoId(Long produtoId) { this.produtoId = produtoId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getDescricao() { return descricao; }
+    public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public String getMarca() { return marca; }
+    public void setMarca(String marca) { this.marca = marca; }
+
+    public Categoria getCategoria() { return categoria; }
+    public void setCategoria(Categoria categoria) { this.categoria = categoria; }
+
+    public BigDecimal getPrecoMedio() { return precoMedio; }
+    public void setPrecoMedio(BigDecimal precoMedio) { this.precoMedio = precoMedio; }
+
+    public String getUnidadeMedida() { return unidadeMedida; }
+    public void setUnidadeMedida(String unidadeMedida) { this.unidadeMedida = unidadeMedida; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public Character getAtivo() { return ativo; }
+    public void setAtivo(Character ativo) { this.ativo = ativo; }
+}
+
+
+package com.shoppinglist.model;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@Entity
+@Table(name = "usuarios")
+public class Usuario {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "usuario_id")
+    private Long usuarioId;
+
+    @NotBlank(message = "Nome é obrigatório")
+    @Size(max = 100, message = "Nome deve ter no máximo 100 caracteres")
+    @Column(name = "nome", nullable = false)
+    private String nome;
+
+    @NotBlank(message = "Email é obrigatório")
+    @Email(message = "Email deve ser válido")
+    @Column(name = "email", nullable = false, unique = true)
+    private String email;
+
+    @NotBlank(message = "Senha é obrigatório")
+    @Size(min = 6, message = "Senha deve ter pelo menos 6 caracteres")
+    @Column(name = "senha", nullable = false)
+    private String senha;
+
+    @Column(name = "ativo")
+    private Boolean ativo = true;
+
+    @Column(name = "data_criacao")
+    private LocalDateTime dataCriacao;
+
+    @OneToMany(mappedBy = "usuario", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ListaCompras> listasCompras = new ArrayList<>();
+
+    // Construtores
+    public Usuario() {
+        this.dataCriacao = LocalDateTime.now();
+    }
+
+    public Usuario(String nome, String email, String senha) {
+        this();
+        this.nome = nome;
+        this.email = email;
+        this.senha = senha;
+    }
+
+    // Getters e Setters
+    public Long getUsuarioId() { return usuarioId; }
+    public void setUsuarioId(Long usuarioId) { this.usuarioId = usuarioId; }
+
+    public String getNome() { return nome; }
+    public void setNome(String nome) { this.nome = nome; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getSenha() { return senha; }
+    public void setSenha(String senha) { this.senha = senha; }
+
+    public Boolean getAtivo() { return ativo; }
+    public void setAtivo(Boolean ativo) { this.ativo = ativo; }
+
+    public LocalDateTime getDataCriacao() { return dataCriacao; }
+    public void setDataCriacao(LocalDateTime dataCriacao) { this.dataCriacao = dataCriacao; }
+
+    public List<ListaCompras> getListasCompras() { return listasCompras; }
+    public void setListasCompras(List<ListaCompras> listasCompras) { this.listasCompras = listasCompras; }
+}
+
+package com.shoppinglist.repository;
+
+import com.shoppinglist.model.Categoria;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
+    List<Categoria> findByAtivo(Character ativo); // MUDADO: Character em vez de String
+    List<Categoria> findByUsuarioUsuarioId(Long usuarioId);
+}
+package com.shoppinglist.repository;
+
+import com.shoppinglist.model.ItemLista;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface ItemListaRepository extends JpaRepository<ItemLista, Long> {
+    List<ItemLista> findByListaListaId(Long listaId);
+    List<ItemLista> findByListaListaIdAndComprado(Long listaId, boolean comprado);
+    List<ItemLista> findByComprado(boolean comprado);
+
+    @Query("SELECT i FROM ItemLista i WHERE i.lista.usuario.usuarioId = :usuarioId AND i.comprado = false ")
+    List<ItemLista> findItensPendentesPorUsuario(Long usuarioId);
+
+    @Modifying
+    @Query("UPDATE ItemLista i SET i.comprado = false , i.dataCompra = CURRENT_TIMESTAMP WHERE i.itemId = :itemId")
+    void marcarComoComprado(Long itemId);
+
+    @Modifying
+    @Query("UPDATE ItemLista i SET i.comprado = true , i.dataCompra = null WHERE i.itemId = :itemId")
+    public void marcarComoNaoComprado(Long itemId);
+
+    long countByListaListaIdAndComprado(Long listaId, boolean comprado); // MUDADO: Character
+}
+
+package com.shoppinglist.repository;
+
+import com.shoppinglist.model.ListaCompras;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface ListaComprasRepository extends JpaRepository<ListaCompras, Long> {
+
+    // ✅ MÉTODO BÁSICO - Buscar listas por usuário
+    List<ListaCompras> findByUsuarioUsuarioId(Long usuarioId);
+
+    // ✅ CORRIGIDO: Usando Boolean false para itens pendentes
+    @Query("SELECT COUNT(i) FROM ItemLista i WHERE i.lista.usuario.usuarioId = :usuarioId AND i.comprado = false")
+    Long countItensPendentesPorUsuario(@Param("usuarioId") Long usuarioId);
+
+    // ✅ CORRIGIDO: Usando Boolean true para itens comprados
+    @Query("SELECT COALESCE(SUM(i.precoReal), 0) FROM ItemLista i WHERE i.lista.usuario.usuarioId = :usuarioId AND i.comprado = true")
+    BigDecimal sumEconomiaUltimos30Dias(@Param("usuarioId") Long usuarioId);
+
+    // ✅ MÉTODO PARA DASHBOARD - Listas ativas (PENDENTE)
+    @Query("SELECT COUNT(l) FROM ListaCompras l WHERE l.usuario.usuarioId = :usuarioId AND l.status = 'PENDENTE'")
+    Long countListasAtivasPorUsuario(@Param("usuarioId") Long usuarioId);
+
+    // ✅ MÉTODO PARA DASHBOARD - Orçamento total
+    @Query("SELECT COALESCE(SUM(l.orcamentoTotal), 0) FROM ListaCompras l WHERE l.usuario.usuarioId = :usuarioId AND l.status = 'PENDENTE'")
+    BigDecimal sumOrcamentoTotalPorUsuario(@Param("usuarioId") Long usuarioId);
+
+    // ✅ MÉTODO PARA DASHBOARD - Listas recentes (usando native query para LIMIT)
+    @Query(value = "SELECT * FROM listas_compras l WHERE l.usuario_id = :usuarioId ORDER BY l.data_criacao DESC FETCH FIRST 3 ROWS ONLY", nativeQuery = true)
+    List<ListaCompras> findTop3RecentListsByUsuario(@Param("usuarioId") Long usuarioId);
+
+    // ✅ MÉTODO PARA BUSCAR LISTA COM ITENS (se necessário para eager loading)
+    @Query("SELECT l FROM ListaCompras l LEFT JOIN FETCH l.itens WHERE l.listaId = :listaId")
+    Optional<ListaCompras> findByIdWithItens(@Param("listaId") Long listaId);
+
+    @Query("SELECT DISTINCT l FROM ListaCompras l LEFT JOIN FETCH l.itens WHERE l.dataCompraRealizada BETWEEN :dataInicio AND :dataFim AND l.status = :status")
+    List<ListaCompras> findByDataCompraRealizadaBetweenAndStatusWithItens(
+            @Param("dataInicio") LocalDate dataInicio,
+            @Param("dataFim") LocalDate dataFim,
+            @Param("status") String status);
+
+    List<ListaCompras> findByDataCompraRealizadaBetweenAndStatus(
+            @Param("dataInicio") LocalDate dataInicio,
+            @Param("dataFim") LocalDate dataFim,
+            @Param("status") String status);
+
+}
+
+package com.shoppinglist.repository;
+
+import com.shoppinglist.model.Produto;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface ProdutoRepository extends JpaRepository<Produto, Long> {
+    List<Produto> findByAtivo(Character ativo); // MUDADO: Character em vez de String
+    List<Produto> findByCategoriaCategoriaId(Long categoriaId);
+    List<Produto> findByNomeContainingIgnoreCase(String nome);
+    Optional<Produto> findByNomeAndMarca(String nome, String marca);
+
+    @Query("SELECT p FROM Produto p WHERE p.categoria.nome = :categoriaNome")
+    List<Produto> findByCategoriaNome(String categoriaNome);
+}
+
+package com.shoppinglist.repository;
+
+import com.shoppinglist.model.Usuario;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
+
+    // ✅ Estes métodos devem existir:
+    List<Usuario> findByAtivo(Boolean ativo);
+    Optional<Usuario> findByEmail(String email);
+    boolean existsByEmail(String email);
+}
+
+package com.shoppinglist.service;
+
+import com.shoppinglist.dto.AuthResponseDTO;
+import com.shoppinglist.dto.LoginDTO;
+import com.shoppinglist.model.Usuario;
+import com.shoppinglist.repository.UsuarioRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.Optional;
+
+@Service
+public class AuthService {
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
+    private JwtService jwtService;
+
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    public AuthResponseDTO authenticate(LoginDTO loginDTO) {
+        Optional<Usuario> usuarioOpt = usuarioRepository.findByEmail(loginDTO.getEmail());
+
+        if (usuarioOpt.isEmpty()) {
+            throw new RuntimeException("Usuário não encontrado");
+        }
+
+        Usuario usuario = usuarioOpt.get();
+
+        if (!passwordEncoder.matches(loginDTO.getSenha(), usuario.getSenha())) {
+            throw new RuntimeException("Senha inválida");
+        }
+
+        if (!usuario.getAtivo()) {
+            throw new RuntimeException("Usuário inativo");
+        }
+
+        String token = jwtService.generateToken(usuario.getEmail(), usuario.getUsuarioId());
+
+        return new AuthResponseDTO(
+                token,
+                usuario.getUsuarioId(),
+                usuario.getNome(),
+                usuario.getEmail()
+        );
+    }
+
+    public Usuario register(Usuario usuario) {
+        // Verificar se email já existe
+        if (usuarioRepository.findByEmail(usuario.getEmail()).isPresent()) {
+            throw new RuntimeException("Email já cadastrado");
+        }
+
+        // Criptografar senha
+        usuario.setSenha(passwordEncoder.encode(usuario.getSenha()));
+
+        return usuarioRepository.save(usuario);
+    }
+}
+
+package com.shoppinglist.service;
+
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import javax.crypto.SecretKey;
+import java.util.Date;
+
+@Service
+public class JwtService {
+
+    @Value("${jwt.secret}")
+    private String secret;
+
+    @Value("${jwt.expiration}")
+    private Long expiration;
+
+    private SecretKey getSigningKey() {
+        // Garante que a chave tenha pelo menos 256 bits (32 caracteres)
+        if (secret.length() < 32) {
+            throw new IllegalArgumentException("JWT secret deve ter pelo menos 32 caracteres");
+        }
+        return Keys.hmacShaKeyFor(secret.getBytes());
+    }
+
+    public String generateToken(String email, Long usuarioId) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + expiration);
+
+        return Jwts.builder()
+                .setSubject(email)
+                .claim("usuarioId", usuarioId)
+                .setIssuedAt(now)
+                .setExpiration(expiryDate)
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    public String getEmailFromToken(String token) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        return claims.getSubject();
+    }
+
+    public Long getUsuarioIdFromToken(String token) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        return claims.get("usuarioId", Long.class);
+    }
+
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            System.err.println("Token JWT inválido: " + e.getMessage());
+            return false;
+        }
+    }
+}
+
+
+
+package com.shoppinglist.service;
+
+import com.shoppinglist.model.ItemLista;
+import com.shoppinglist.model.ListaCompras;
+import com.shoppinglist.repository.ItemListaRepository;
+import com.shoppinglist.repository.ListaComprasRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+@Service
+public class ListaComprasService {
+
+    @Autowired
+    private ListaComprasRepository listaComprasRepository;
+
+    @Autowired
+    private ItemListaRepository itemListaRepository;
+
+    @Transactional
+    public ListaCompras finalizarLista(Long listaId, LocalDate dataCompra) {
+        ListaCompras lista = listaComprasRepository.findById(listaId)
+                .orElseThrow(() -> new RuntimeException("Lista não encontrada"));
+
+        // Calcular valor total gasto baseado nos itens comprados
+        BigDecimal valorTotalGasto = BigDecimal.ZERO;
+
+        for (ItemLista item : lista.getItens()) {
+            // ✅ CORRIGIDO: Usando Boolean diretamente
+            if (Boolean.TRUE.equals(item.getComprado()) && item.getPrecoReal() != null) {
+                BigDecimal quantidade = item.getQuantidade() != null ?
+                        item.getQuantidade() : BigDecimal.ONE;
+                BigDecimal precoReal = item.getPrecoReal();
+                valorTotalGasto = valorTotalGasto.add(precoReal.multiply(quantidade));
+            }
+        }
+
+        // Atualizar a lista
+        lista.setValorTotalGasto(valorTotalGasto);
+        lista.setDataCompraRealizada(dataCompra != null ? dataCompra : LocalDate.now());
+        lista.setStatus("CONCLUIDA");
+        lista.setDataAtualizacao(LocalDateTime.now());
+
+        return listaComprasRepository.save(lista);
+    }
+
+    // Método para atualizar preço real de um item
+    @Transactional
+    public ItemLista atualizarPrecoReal(Long itemId, BigDecimal precoReal) {
+        ItemLista item = itemListaRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Item não encontrado"));
+
+        item.setPrecoReal(precoReal);
+        item.setDataAtualizacao(LocalDateTime.now());
+
+        return itemListaRepository.save(item);
+    }
+
+    // ✅ MÉTODO PARA BUSCAR LISTA COM ITENS (se necessário)
+    @Transactional(readOnly = true)
+    public Optional<ListaCompras> findByIdWithItens(Long listaId) {
+        return listaComprasRepository.findById(listaId)
+                .map(lista -> {
+                    // Forçar o carregamento dos itens
+                    lista.getItens().size();
+                    return lista;
+                });
+    }
+}
+
+package com.shoppinglist.service;
+
+import com.shoppinglist.dto.GastosCategoriaDTO;
+import com.shoppinglist.dto.RelatorioGastosPeriodoDTO;
+import com.shoppinglist.model.ItemLista;
+import com.shoppinglist.model.ListaCompras;
+import com.shoppinglist.repository.ListaComprasRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class RelatorioService {
+
+    @Autowired
+    private ListaComprasRepository listaComprasRepository;
+
+    public RelatorioGastosPeriodoDTO getGastosPorPeriodo(LocalDate dataInicio, LocalDate dataFim) {
+        List<ListaCompras> listasNoPeriodo = listaComprasRepository
+                .findByDataCompraRealizadaBetweenAndStatusWithItens(
+                        dataInicio,
+                        dataFim,
+                        "CONCLUIDA"
+                );
+
+// ADICIONE DEBUG PARA VERIFICAR
+        System.out.println("=== DEBUG RELATÓRIO ===");
+        System.out.println("Período: " + dataInicio + " até " + dataFim);
+        System.out.println("Listas encontradas: " + listasNoPeriodo.size());
+
+        for (ListaCompras lista : listasNoPeriodo) {
+            System.out.println("Lista: " + lista.getNome() +
+                    ", Status: " + lista.getStatus() +
+                    ", Valor Total: " + lista.getValorTotalGasto() +
+                    ", Itens: " + (lista.getItens() != null ? lista.getItens().size() : 0));
+        }
+
+        BigDecimal totalGasto = listasNoPeriodo.stream()
+                .map(ListaCompras::getValorTotalGasto)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Long totalItensComprados = listasNoPeriodo.stream()
+                .mapToLong(lista -> lista.getItens() != null ?
+                        lista.getItens().stream()
+                                .filter(item -> item.getComprado())
+                                .count() : 0)
+                .sum();
+
+        return new RelatorioGastosPeriodoDTO(
+                dataInicio,
+                dataFim,
+                totalGasto,
+                totalItensComprados,
+                listasNoPeriodo.size()
+        );
+    }
+
+    public List<GastosCategoriaDTO> getGastosPorCategoria(LocalDate dataInicio, LocalDate dataFim) {
+        List<ListaCompras> listasNoPeriodo = listaComprasRepository
+                .findByDataCompraRealizadaBetweenAndStatusWithItens(
+                        dataInicio,
+                        dataFim,
+                        "CONCLUIDA"
+                );
+
+        // Agrupar gastos por categoria
+        Map<String, BigDecimal> gastosPorCategoria = new HashMap<>();
+
+        for (ListaCompras lista : listasNoPeriodo) {
+            if (lista.getItens() != null) {
+                for (ItemLista item : lista.getItens()) {
+                    if (item.getComprado() && item.getPrecoReal() != null) {
+                        String categoria = obterCategoriaItem(item);
+                        BigDecimal precoReal = item.getPrecoReal();
+
+                        gastosPorCategoria.merge(categoria, precoReal, BigDecimal::add);
+                    }
+                }
+            }
+        }
+
+        return gastosPorCategoria.entrySet().stream()
+                .map(entry -> new GastosCategoriaDTO(entry.getKey(), entry.getValue()))
+                .sorted((a, b) -> b.getTotalGasto().compareTo(a.getTotalGasto()))
+                .collect(Collectors.toList());
+    }
+
+    // Método auxiliar para obter a categoria do item
+    private String obterCategoriaItem(ItemLista item) {
+        if (item.getCategoria() != null && item.getCategoria().getNome() != null) {
+            return item.getCategoria().getNome();
+        } else if (item.getProduto() != null && item.getProduto().getCategoria() != null) {
+            return item.getProduto().getCategoria().getNome();
+        } else {
+            return "Sem Categoria";
+        }
+    }
+
+    public List<ListaCompras> getHistoricoCompras(LocalDate dataInicio, LocalDate dataFim) {
+        // ✅ CORRIGIDO: Usando mesma lógica
+        List<ListaCompras> todasListas = listaComprasRepository.findAll();
+
+        return todasListas.stream()
+                .filter(lista -> "CONCLUIDA".equals(lista.getStatus()) &&
+                        lista.getDataCompraRealizada() != null &&
+                        !lista.getDataCompraRealizada().isBefore(dataInicio) &&
+                        !lista.getDataCompraRealizada().isAfter(dataFim))
+                .collect(Collectors.toList());
+    }
+
+    // Método adicional: Relatório de gastos por mês
+    public Map<String, BigDecimal> getGastosPorMes(int ano) {
+        List<ListaCompras> listasDoAno = listaComprasRepository
+                .findByDataCompraRealizadaBetweenAndStatus(
+                        LocalDate.of(ano, 1, 1),
+                        LocalDate.of(ano, 12, 31),
+                        "CONCLUIDA"
+                );
+
+        Map<String, BigDecimal> gastosPorMes = new TreeMap<>();
+
+        for (ListaCompras lista : listasDoAno) {
+            if (lista.getDataCompraRealizada() != null && lista.getValorTotalGasto() != null) {
+                String mes = lista.getDataCompraRealizada().getMonth().toString();
+                BigDecimal valor = lista.getValorTotalGasto();
+
+                gastosPorMes.merge(mes, valor, BigDecimal::add);
+            }
+        }
+
+        return gastosPorMes;
+    }
+}
+
+package com.shoppinglist;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+
+@SpringBootApplication(scanBasePackages = "com.shoppinglist")
+@EntityScan("com.shoppinglist.model")
+@EnableJpaRepositories("com.shoppinglist.repository")
+public class ShoppingListApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ShoppingListApplication.class, args);
+    }
+}
+
+
+spring.application.name=shoppinglist
+
+server.port=8080
+server.servlet.context-path=/
+
+jwt.secret=dd6d6317416be021f43d8ed0f9b3d87606d979afb3c0690c990b8d8e04ffcf25
+jwt.expiration=86400000
+
+spring.datasource.url=jdbc:oracle:thin:@//192.168.1.16:1521/orclpdb.localdomain
+spring.datasource.username=compras_app
+spring.datasource.password=compras_app
+spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
+
+
+spring.jpa.database-platform=org.hibernate.dialect.OracleDialect
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+
+logging.level.com.shoppinglist=DEBUG
+logging.level.org.springframework.web=DEBUG
+logging.level.org.hibernate.SQL=DEBUG
+
+springdoc.api-docs.path=/v3/api-docs
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.swagger-ui.enabled=true
+springdoc.api-docs.enabled=true
+springdoc.paths-to-match=/api/**
+
+server.error.include-stacktrace=always
+server.error.include-message=always
+
+management.endpoints.web.exposure.include=*
+
